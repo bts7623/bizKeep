@@ -10,9 +10,9 @@
 5. **한 줄 메모.** 메모는 40자 한 줄. 멀티라인·리치텍스트 금지.
 
 ## 기술 스택
-- Flutter 3.27 (stable) / Dart 3.6
+- Flutter 3.47 (stable, Homebrew cask) / Dart 3.10
 - 상태관리: flutter_riverpod
-- DB: drift + sqlite3_flutter_libs, FTS5 가상테이블
+- DB: drift + sqlite3_flutter_libs. 검색은 전체 레코드 메모리 캐시 + `search_ranker.dart` (수천 건까지 ms 단위). FTS5는 1만 건 초과 시 도입.
 - OCR: google_mlkit_text_recognition (Korean script, 온디바이스)
 - 카메라: camera / image_picker, 이미지: image (WebP 압축, ≤1024px)
 - 전화·메일·문자: url_launcher
@@ -43,18 +43,29 @@ docs/
   spec.md                  # 요구사항·화면·검색규칙·데이터모델 (원본은 Claude Design 캔버스)
   design.md                # 색·타이포·간격 토큰
 tools/
-  run.command / job.sh     # Finder에서 실행하는 작업 러너 (로그: tools/job.log)
+  daemon.command           # Finder에서 한 번 실행해 두는 작업 데몬 (queue/*.sh → logs/*.log)
 ```
 
 ## 개발 환경 메모
-- Flutter: /opt/homebrew/bin/flutter
+- Flutter: /opt/homebrew/bin/flutter (3.47.7)
 - Xcode 설치 후: `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer && sudo xcodebuild -runFirstLaunch`, `brew install cocoapods`
-- 명령 실행은 tools/job.sh 를 수정한 뒤 Finder에서 tools/run.command 열기 → tools/job.log 확인
-- 테스트: `flutter test` (Xcode 불필요), 정적 분석: `flutter analyze`
+- **작업 데몬**: Finder에서 `tools/daemon.command` → "다음으로 열기 → 터미널" 로 한 번 띄워두면,
+  `tools/queue/NN_name.sh` 에 넣은 스크립트를 순서대로 실행하고 `tools/logs/NN_name.log` 에 기록한다. 종료는 `tools/queue/STOP` 파일.
+- 테스트: `flutter test` (Xcode 불필요, 17개 통과), 정적 분석: `flutter analyze` (0 issues)
+- 코드 생성: `dart run build_runner build` (drift)
+- **GitHub**: 원격 https://github.com/bts7623/bizKeep (private). 맥에는 gh·자격증명이 없으므로 맥에서 직접 push 하지 않는다.
+  커밋은 맥(데몬)에서 만들고 `git bundle create tools/repo.bundle main` → Claude 세션 컨테이너로 가져가 push 한다.
+
+## 진행 상태
+- [x] 1단계 코드: 목록·검색·상세(인라인 메모)·입력·설정·명함 보기, 헤더 숨김, 랭커·OCR 파서 + 테스트
+- [ ] 1단계 검증: Xcode 설치 후 시뮬레이터 실행
+- [ ] 2단계: camera + google_mlkit_text_recognition → `capture_screen.dart` 교체
+- [ ] 3단계: 통화 식별 (iOS Call Directory Extension)
+- [ ] 4단계: 백업/복원, 초성검색, LLM 보정
 
 ## 코드 규칙
 - 목록 행 위젯은 `const` + 고정 높이, `ListView.builder` 사용. 썸네일은 별도 생성된 작은 WebP만.
-- 검색은 150ms 디바운스, FTS5 MATCH prefix 쿼리, 결과 상위 200건.
+- 검색은 150ms 디바운스, 메모리 캐시 + SearchRanker, 결과 상위 200건.
 - 2글자 이하 입력은 이름·회사만 검색, 3글자부터 전 필드. 숫자 시작 → 번호 우선, @ 포함 → 메일 우선.
 - 결과 정렬 가중치: 이름 > 회사 > 직책 > 번호·메일 > 주소·메모. 이름 완전일치 최상단.
 - 모든 레코드는 UUID + updated_at 보유 (기기 간 가져오기·충돌 판단용).
