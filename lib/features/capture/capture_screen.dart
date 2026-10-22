@@ -34,7 +34,8 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> with WidgetsBindi
   static const _needStable = 3;
   DateTime _lastFrame = DateTime.fromMillisecondsSinceEpoch(0);
 
-  static const guideAspect = 9 / 5;
+  /// 안내 프레임 비율. 한국 90×50(1.8)·86×54(1.6)·일본 91×55(1.65) 모두 들어오게 1.7. 실제 크롭은 Vision 검출 사각형 기준.
+  static const guideAspect = 1.7;
 
   @override
   void initState() {
