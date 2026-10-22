@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/actions.dart';
+import '../../core/image_paths.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/contact_repo.dart';
@@ -24,7 +25,7 @@ class _CardViewScreenState extends ConsumerState<CardViewScreen> {
   Widget build(BuildContext context) {
     final c = ref.watch(contactsProvider).value?.where((x) => x.id == widget.contactId).firstOrNull;
     if (c == null) return const Scaffold(backgroundColor: Color(0xFF0B0C10));
-    final images = [c.imageFront, c.imageBack].whereType<String>().toList();
+    final images = [c.imageFront, c.imageBack].whereType<String>().map(ImagePaths.resolve).toList();
     final pad = MediaQuery.paddingOf(context);
 
     return Scaffold(

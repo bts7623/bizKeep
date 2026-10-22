@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/actions.dart';
+import '../../core/image_paths.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/contact_repo.dart';
@@ -39,6 +40,7 @@ class _ListScreenState extends ConsumerState<ListScreen> {
     final total = ref.watch(contactsProvider).value?.length ?? 0;
     final searching = ref.watch(searchQueryProvider).trim().isNotEmpty;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top;
 
     return Scaffold(
       body: Container(
@@ -64,8 +66,10 @@ class _ListScreenState extends ConsumerState<ListScreen> {
                     elevation: 0,
                     scrolledUnderElevation: 0,
                     automaticallyImplyLeading: false,
+                    primary: false,
                     toolbarHeight: 0,
-                    expandedHeight: 132,
+                    // 상태바 + 라벨(13) + 숫자(36) + 칩(34) + 여백 — 기기별 상태바 높이를 직접 더한다
+                    expandedHeight: topInset + _Header.height,
                     // 접힐 때 내용이 위로 밀려 올라가며 잘리도록 (오버플로 방지)
                     flexibleSpace: ClipRect(
                       child: OverflowBox(
@@ -179,6 +183,8 @@ class _ListScreenState extends ConsumerState<ListScreen> {
 
 class _Header extends ConsumerWidget {
   const _Header({required this.total, required this.searching});
+  /// 상태바 제외 높이: 8 + 16(라벨) + 2 + 36(숫자) + 12 + 34(칩) + 18(아래 여백)
+  static const double height = 126;
   final int total;
   final bool searching;
 
@@ -187,7 +193,7 @@ class _Header extends ConsumerWidget {
     final sort = ref.watch(sortModeProvider);
     final top = MediaQuery.paddingOf(context).top;
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, top + 8, 20, 0),
+      padding: EdgeInsets.fromLTRB(20, top + 8, 20, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -215,7 +221,7 @@ class _Header extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Row(
             children: [
               for (final m in SortMode.values) ...[
@@ -393,7 +399,8 @@ class CardThumb extends StatelessWidget {
   final double height;
   @override
   Widget build(BuildContext context) {
-    final path = contact.thumb ?? contact.imageFront;
+    final stored = contact.thumb ?? contact.imageFront;
+    final path = stored == null ? null : ImagePaths.resolve(stored);
     return ClipRRect(
       borderRadius: BorderRadius.circular(R.thumb),
       child: Container(

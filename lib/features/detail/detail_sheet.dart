@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/actions.dart';
+import '../../core/image_paths.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/contact_repo.dart';
@@ -170,7 +171,7 @@ class _DetailSheetState extends ConsumerState<DetailSheet> {
     if (ok == true) {
       for (final p in [c.imageFront, c.imageBack, c.thumb]) {
         if (p != null) {
-          try { await File(p).delete(); } catch (_) {}
+          try { await File(ImagePaths.resolve(p)).delete(); } catch (_) {}
         }
       }
       await ref.read(repoProvider).delete(c.id);
@@ -184,7 +185,7 @@ class _CardArea extends StatelessWidget {
   final Contact contact;
   @override
   Widget build(BuildContext context) {
-    final img = contact.imageFront;
+    final img = contact.imageFront == null ? null : ImagePaths.resolve(contact.imageFront!);
     return GestureDetector(
       onTap: img == null ? null : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => CardViewScreen(contactId: contact.id), fullscreenDialog: true)),
       child: Container(

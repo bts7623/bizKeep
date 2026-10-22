@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/image_paths.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/ocr_parser.dart';
@@ -149,7 +150,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> with WidgetsBindi
             name: parsed.name, company: parsed.company, department: parsed.department, title: parsed.title,
             phoneMobile: parsed.phoneMobile, phoneOffice: parsed.phoneOffice, fax: parsed.fax, email: parsed.email,
             address: parsed.address, website: parsed.website,
-            imageFront: saved.front, thumb: saved.thumb, ocrRaw: ocrText, source: 'camera',
+            imageFront: ImagePaths.toStored(saved.front), thumb: ImagePaths.toStored(saved.thumb), ocrRaw: ocrText, source: 'camera',
             lowConfidence: parsed.lowConfidence.toList(),
           );
       HapticFeedback.heavyImpact();
