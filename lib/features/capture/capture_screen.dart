@@ -45,10 +45,12 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> with WidgetsBindi
   }
 
   Future<void> _init() async {
+    if (_initializing) return;
+    _initializing = true;
     try {
       final cams = await availableCameras();
       if (cams.isEmpty) {
-        setState(() => _error = '이 기기엔 카메라가 없어요\n(시뮬레이터에선 직접 입력을 써 주세요)');
+        if (mounted) setState(() => _error = '이 기기엔 카메라가 없어요\n(시뮬레이터에선 직접 입력을 써 주세요)');
         return;
       }
       final back = cams.firstWhere((c) => c.lensDirection == CameraLensDirection.back, orElse: () => cams.first);
@@ -61,23 +63,32 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> with WidgetsBindi
       setState(() => _cam = cam);
       if (Vision.supported) await cam.startImageStream(_onFrame);
     } on CameraException catch (e) {
+      if (!mounted) return;
       setState(() => _error = e.code == 'CameraAccessDenied'
           ? '카메라 권한이 필요해요.\n설정 → BizKeep → 카메라를 켜 주세요.'
           : '카메라를 열 수 없어요 (${e.code})');
     } catch (_) {
-      setState(() => _error = '카메라를 열 수 없어요');
+      if (mounted) setState(() => _error = '카메라를 열 수 없어요');
+    } finally {
+      _initializing = false;
     }
   }
 
+  bool _initializing = false;
+
+  /// 홈으로 나가면(paused) 카메라를 완전히 놓고, 돌아오면(resumed) 새로 연다.
+  /// inactive(제어센터·알림 등 잠깐 가려짐)에서는 건드리지 않는다.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final cam = _cam;
-    if (cam == null || !cam.value.isInitialized) return;
-    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
-      cam.dispose();
+    if (state == AppLifecycleState.paused) {
+      final cam = _cam;
       _cam = null;
+      _last = null;
+      _stable = 0;
+      if (mounted) setState(() {});
+      cam?.dispose();
     } else if (state == AppLifecycleState.resumed) {
-      _init();
+      if (_cam == null && !_initializing && !_capturing) _init();
     }
   }
 
