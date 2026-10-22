@@ -6,14 +6,14 @@
 1. **속도가 최우선.** 콜드스타트 1초 내, 검색 응답 50ms 내. UI 스레드에서 무거운 일 금지 (OCR·이미지 압축·FTS 인덱싱은 isolate).
 2. **화면은 3개 + 보조.** 목록(검색 포함) / 상세(수정 포함) / 설정. 그 외 화면 추가 금지. 설명문·온보딩 최소화.
 3. **촬영 = 저장.** 명함 찍으면 확인 단계 없이 즉시 저장 후 상세 표시. "저장하시겠습니까" 류 다이얼로그 금지.
-4. **서버 없음. 전부 온디바이스.** 네트워크는 (설정에서 켰을 때만) LLM 보정용 외엔 사용 안 함.
+4. **서버 없음. 전부 온디바이스. 네트워크 사용 없음.** (AI 보정 옵션은 제거함 — 규칙 분류가 자주 틀리면 그때 재검토)
 5. **한 줄 메모.** 메모는 40자 한 줄. 멀티라인·리치텍스트 금지.
 
 ## 기술 스택
 - Flutter 3.47 (stable, Homebrew cask) / Dart 3.10
 - 상태관리: flutter_riverpod
 - DB: drift + sqlite3_flutter_libs. 검색은 전체 레코드 메모리 캐시 + `search_ranker.dart` (수천 건까지 ms 단위). FTS5는 1만 건 초과 시 도입.
-- OCR: google_mlkit_text_recognition (Korean script, 온디바이스)
+- OCR·사각 검출: iOS는 Apple Vision (ios/Runner/VisionPlugin.swift, MethodChannel `bizkeep/vision`) — ML Kit은 arm64 시뮬레이터 미지원이라 제외. Android는 ML Kit을 Kotlin 채널로 (2단계-B).
 - 카메라: camera / image_picker, 이미지: image (WebP 압축, ≤1024px)
 - 전화·메일·문자: url_launcher
 - 통화 식별 (3단계): iOS CallKit Call Directory Extension (Swift) / Android CallScreeningService + 오버레이
@@ -53,15 +53,18 @@ tools/
   `tools/queue/NN_name.sh` 에 넣은 스크립트를 순서대로 실행하고 `tools/logs/NN_name.log` 에 기록한다. 종료는 `tools/queue/STOP` 파일.
 - 테스트: `flutter test` (Xcode 불필요, 17개 통과), 정적 분석: `flutter analyze` (0 issues)
 - 코드 생성: `dart run build_runner build` (drift)
+- 시뮬레이터 UI 검증: `flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d <UDID>` → tools/logs/shots/*.png
+- Flutter 3.47 + Xcode 27: SPM 끔(`flutter config --no-enable-swift-package-manager`), Podfile `use_frameworks! :linkage => :static`, platform 15.5
 - **GitHub**: 원격 https://github.com/bts7623/bizKeep (private). 맥에는 gh·자격증명이 없으므로 맥에서 직접 push 하지 않는다.
   커밋은 맥(데몬)에서 만들고 `git bundle create tools/repo.bundle main` → Claude 세션 컨테이너로 가져가 push 한다.
 
 ## 진행 상태
 - [x] 1단계 코드: 목록·검색·상세(인라인 메모)·입력·설정·명함 보기, 헤더 숨김, 랭커·OCR 파서 + 테스트
-- [ ] 1단계 검증: Xcode 설치 후 시뮬레이터 실행
-- [ ] 2단계: camera + 사각 검출 **자동 촬영**(프레임 맞추면 셔터 없이 촬영) + google_mlkit_text_recognition → `capture_screen.dart` 교체
+- [x] 1단계 검증: iPhone 18 Pro 시뮬레이터(iOS 27) — integration_test 12장면 통과 (tools/logs/shots/)
+- [x] 2단계-A (iOS): camera + Vision 사각 검출 **자동 촬영** + 원근 보정 크롭 + Vision OCR → 즉시 저장. **실기기 검증 필요** (시뮬레이터엔 카메라 없음)
+- [ ] 2단계-B (Android): ML Kit Kotlin 채널로 `bizkeep/vision` 동일 API 구현
 - [ ] 3단계: 통화 식별 (iOS Call Directory Extension)
-- [ ] 4단계: 백업/복원, 초성검색, LLM 보정
+- [ ] 4단계: 백업/복원, 초성검색
 
 ## 코드 규칙
 - 목록 행 위젯은 `const` + 고정 높이, `ListView.builder` 사용. 썸네일은 별도 생성된 작은 WebP만.

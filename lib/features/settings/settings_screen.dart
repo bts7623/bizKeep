@@ -30,10 +30,6 @@ class SettingsScreen extends ConsumerWidget {
             const _Toggle(title: '명함 원본 이미지 보관', sub: '끄면 텍스트만 저장', value: true, enabled: false, last: true),
           ]),
           const SizedBox(height: 22),
-          const _Group(title: '인식', children: [
-            _Toggle(title: 'AI로 인식 결과 보정', sub: '켜면 명함 텍스트가 외부로 전송돼요', value: false, enabled: false, last: true),
-          ]),
-          const SizedBox(height: 22),
           _Group(title: '정보', children: [
             Padding(
               padding: const EdgeInsets.all(14),
