@@ -59,7 +59,7 @@ tools/
 ## 진행 상태
 - [x] 1단계 코드: 목록·검색·상세(인라인 메모)·입력·설정·명함 보기, 헤더 숨김, 랭커·OCR 파서 + 테스트
 - [ ] 1단계 검증: Xcode 설치 후 시뮬레이터 실행
-- [ ] 2단계: camera + google_mlkit_text_recognition → `capture_screen.dart` 교체
+- [ ] 2단계: camera + 사각 검출 **자동 촬영**(프레임 맞추면 셔터 없이 촬영) + google_mlkit_text_recognition → `capture_screen.dart` 교체
 - [ ] 3단계: 통화 식별 (iOS Call Directory Extension)
 - [ ] 4단계: 백업/복원, 초성검색, LLM 보정
 
