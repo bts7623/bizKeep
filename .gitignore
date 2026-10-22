@@ -49,3 +49,7 @@ tools/logs/
 tools/queue/
 tools/job.log
 tools/env_report.txt
+tools/*.bundle
+tools/*.tgz
+tools/push.sh
+build/dd/

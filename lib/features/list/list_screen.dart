@@ -58,13 +58,23 @@ class _ListScreenState extends ConsumerState<ListScreen> {
                     floating: true,
                     snap: true,
                     pinned: false,
-                    backgroundColor: Colors.transparent,
+                    backgroundColor: C.bgTop,
                     surfaceTintColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
                     elevation: 0,
+                    scrolledUnderElevation: 0,
                     automaticallyImplyLeading: false,
                     toolbarHeight: 0,
                     expandedHeight: 132,
-                    flexibleSpace: _Header(total: total, searching: searching),
+                    // 접힐 때 내용이 위로 밀려 올라가며 잘리도록 (오버플로 방지)
+                    flexibleSpace: ClipRect(
+                      child: OverflowBox(
+                        alignment: Alignment.bottomCenter,
+                        minHeight: 0,
+                        maxHeight: double.infinity,
+                        child: _Header(total: total, searching: searching),
+                      ),
+                    ),
                   ),
                   if (total == 0)
                     SliverFillRemaining(hasScrollBody: false, child: _EmptyState(onCapture: _openCapture))
