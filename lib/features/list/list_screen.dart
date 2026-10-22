@@ -149,7 +149,9 @@ class _ListScreenState extends ConsumerState<ListScreen> {
       _openDetail(c);
       return;
     }
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => CardViewScreen(contactId: c.id), fullscreenDialog: true));
+    Navigator.of(context)
+        .push<String>(MaterialPageRoute(builder: (_) => CardViewScreen(contactId: c.id), fullscreenDialog: true))
+        .then((r) { if (r == 'detail' && mounted) _openDetail(c); });
   }
 
   Future<void> _openCapture() async {

@@ -14,9 +14,11 @@ abstract final class Act {
 
   static String _digits(String s) => s.replaceAll(RegExp(r'[^0-9+]'), '');
 
-  static Future<void> _launch(Uri uri) async {
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+  static Future<bool> _launch(Uri uri) async {
+    try {
+      return await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      return false;
     }
   }
 }

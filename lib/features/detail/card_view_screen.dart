@@ -8,7 +8,6 @@ import '../../core/image_paths.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/contact_repo.dart';
-import 'detail_sheet.dart';
 
 /// 명함 이미지 전체 화면. 핀치 줌, 앞/뒷면 스와이프.
 class CardViewScreen extends ConsumerStatefulWidget {
@@ -80,7 +79,7 @@ class _CardViewScreenState extends ConsumerState<CardViewScreen> {
               Expanded(
                 child: _GlassBar(
                   icon: Icons.notes_rounded, label: '상세 정보',
-                  onTap: () { Navigator.pop(context); DetailSheet.show(context, c.id); },
+                  onTap: () => Navigator.pop(context, 'detail'),
                 ),
               ),
               const SizedBox(width: 10),

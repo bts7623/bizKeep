@@ -19,6 +19,9 @@ abstract final class ImagePaths {
   /// DB 값(절대경로 또는 파일명) → 현재 유효한 절대경로
   static String resolve(String stored) {
     if (stored.isEmpty) return stored;
+    // 파일명만 저장된 정상 케이스: I/O 없이 조합
+    if (!stored.startsWith('/')) return p.join(cardsDir, stored);
+    // 구버전 절대경로: 살아있으면 그대로, 아니면 현재 샌드박스로 재조합
     if (File(stored).existsSync()) return stored;
     return p.join(cardsDir, p.basename(stored));
   }

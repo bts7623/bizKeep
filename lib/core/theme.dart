@@ -43,13 +43,11 @@ final dockShadow = [
 ];
 
 ThemeData buildTheme() {
-  const font = 'NotoSansKR';
   final base = ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
     scaffoldBackgroundColor: C.bg,
     colorScheme: ColorScheme.fromSeed(seedColor: C.accent, surface: C.surface),
-    fontFamily: font,
     splashFactory: InkSparkle.splashFactory,
   );
   return base.copyWith(
