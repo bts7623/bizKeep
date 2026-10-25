@@ -1,4 +1,6 @@
 import 'package:bizkeep/core/providers.dart';
+import 'package:bizkeep/features/detail/detail_sheet.dart';
+import 'package:bizkeep/features/list/list_screen.dart';
 import 'package:bizkeep/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -130,5 +132,22 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.text('최근 등록'));
     await t.pumpAndSettle();
+
+    // 중복 명함: 김전영 (같은 휴대전화, 직책 승진) 을 다시 등록한 상황
+    final dupe = await repo.create(name: '김전영', company: '폭스소프트', title: '이사', phoneMobile: '010-1234-5678', email: 'jy.kim@foxsoft.co.kr', source: 'camera');
+    await t.pumpAndSettle();
+    final ctx = t.element(find.byType(ListScreen));
+    final fut = DetailSheet.show(ctx, dupe.id, justSaved: true);
+    await t.pumpAndSettle(const Duration(milliseconds: 600));
+    await shot(t, '18_dup_banner');
+    await t.tap(find.textContaining('이미 있어요'));
+    await shot(t, '19_dup_compare');
+    await t.tap(find.text('새 명함으로 교체'));
+    await t.pumpAndSettle(const Duration(milliseconds: 500));
+    await shot(t, '20_after_replace');
+    await t.tap(find.byIcon(Icons.close_rounded).first);
+    await fut;
+    await t.pumpAndSettle();
+    await shot(t, '21_list_after_replace');
   });
 }

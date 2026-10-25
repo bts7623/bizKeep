@@ -19,8 +19,9 @@ class DetailSheet extends ConsumerStatefulWidget {
   final String contactId;
   final bool justSaved;
 
-  static Future<void> show(BuildContext context, String id, {bool justSaved = false}) {
-    return showModalBottomSheet(
+  /// 반환: 'next' 면 사용자가 "다음 명함" 을 눌러 바로 촬영을 이어가길 원함.
+  static Future<String?> show(BuildContext context, String id, {bool justSaved = false}) {
+    return showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -35,10 +36,30 @@ class DetailSheet extends ConsumerStatefulWidget {
 }
 
 class _DetailSheetState extends ConsumerState<DetailSheet> {
+  late String _id = widget.contactId;
+  Contact? _dup; // 촬영 직후 같은 사람이 이미 있으면
+  bool _dupChecked = false;
+  bool _dupDismissed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.justSaved) _checkDup();
+  }
+
+  Future<void> _checkDup() async {
+    final repo = ref.read(repoProvider);
+    final me = await repo.get(_id);
+    if (me == null) return;
+    final d = await repo.findDuplicate(me);
+    if (mounted) setState(() { _dup = d; _dupChecked = true; });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final contact = ref.watch(contactsProvider).value?.where((c) => c.id == widget.contactId).firstOrNull;
+    final contact = ref.watch(contactsProvider).value?.where((c) => c.id == _id).firstOrNull;
     if (contact == null) return const SizedBox.shrink();
+    final dup = (_dupChecked && !_dupDismissed) ? _dup : null;
     final low = contact.lowConfidenceFields.toSet();
     final h = MediaQuery.sizeOf(context).height;
 
@@ -75,6 +96,10 @@ class _DetailSheetState extends ConsumerState<DetailSheet> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 6, 20, 24),
               children: [
+                if (dup != null) ...[
+                  _DupBanner(old: dup, fresh: contact, onTap: () => _resolveDup(context, dup, contact), onDismiss: () => setState(() => _dupDismissed = true)),
+                  const SizedBox(height: 12),
+                ],
                 _CardArea(contact: contact),
                 const SizedBox(height: 18),
                 Row(children: [
@@ -142,19 +167,61 @@ class _DetailSheetState extends ConsumerState<DetailSheet> {
                 ),
               ),
               const SizedBox(width: 10),
-              SizedBox(
-                width: 52, height: 52,
-                child: FilledButton(
-                  onPressed: () => _delete(context, contact),
-                  style: FilledButton.styleFrom(backgroundColor: C.dangerTint, foregroundColor: C.danger, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                  child: const Icon(Icons.delete_outline_rounded, size: 22),
+              if (widget.justSaved)
+                // 촬영 직후: 메모 적고 바로 다음 명함 (연속 등록)
+                Expanded(
+                  flex: 2,
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.pop(context, 'next'),
+                    style: FilledButton.styleFrom(backgroundColor: C.ink, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                    icon: const Icon(Icons.photo_camera_outlined, size: 20),
+                    label: const Text('다음 명함', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  ),
+                )
+              else
+                SizedBox(
+                  width: 52, height: 52,
+                  child: FilledButton(
+                    onPressed: () => _delete(context, contact),
+                    style: FilledButton.styleFrom(backgroundColor: C.dangerTint, foregroundColor: C.danger, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                    child: const Icon(Icons.delete_outline_rounded, size: 22),
+                  ),
                 ),
-              ),
             ]),
           ),
         ],
       ),
     );
+  }
+
+  /// 중복 처리: 달라진 게 없으면 바로 새 레코드 삭제, 있으면 비교 시트.
+  Future<void> _resolveDup(BuildContext context, Contact old, Contact fresh) async {
+    final diffs = ContactRepo.diffFields(old, fresh);
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: C.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(R.sheet))),
+      builder: (_) => _CompareSheet(old: old, fresh: fresh, diffs: diffs),
+    );
+    if (!context.mounted || choice == null || choice == 'keep') {
+      if (choice == 'keep' && mounted) setState(() => _dupDismissed = true);
+      return;
+    }
+    final repo = ref.read(repoProvider);
+    if (choice == 'replace') {
+      final oldImages = await repo.replaceWith(old: old, fresh: fresh);
+      for (final p in oldImages) {
+        try { await File(ImagePaths.resolve(p)).delete(); } catch (_) {}
+      }
+    } else if (choice == 'drop') {
+      for (final p in [fresh.imageFront, fresh.imageBack, fresh.thumb]) {
+        if (p != null) { try { await File(ImagePaths.resolve(p)).delete(); } catch (_) {} }
+      }
+      await repo.delete(fresh.id);
+    }
+    if (mounted) setState(() { _id = old.id; _dup = null; });
   }
 
   void _edit(BuildContext context, Contact c) {
@@ -281,6 +348,106 @@ class _MemoFieldState extends ConsumerState<_MemoField> {
             decoration: const InputDecoration(counterText: '', hintText: '한 줄 메모 (담당 업무, 만난 자리 등)', hintStyle: TextStyle(color: C.inkFaint, fontWeight: FontWeight.w400)),
           ),
         ),
+      ]),
+    );
+  }
+}
+
+/// 촬영 직후 "이미 있는 사람" 배너
+class _DupBanner extends StatelessWidget {
+  const _DupBanner({required this.old, required this.fresh, required this.onTap, required this.onDismiss});
+  final Contact old;
+  final Contact fresh;
+  final VoidCallback onTap;
+  final VoidCallback onDismiss;
+  @override
+  Widget build(BuildContext context) {
+    final d = DateTime.fromMillisecondsSinceEpoch(old.createdAt);
+    final same = ContactRepo.diffFields(old, fresh).isEmpty;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+        decoration: BoxDecoration(color: C.warnBg, borderRadius: BorderRadius.circular(14)),
+        child: Row(children: [
+          const Icon(Icons.people_alt_outlined, size: 20, color: C.warnInk),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${old.name.isEmpty ? '이 사람' : old.name} 님이 이미 있어요', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: C.warnInk)),
+              const SizedBox(height: 1),
+              Text(same ? '똑같은 명함이에요 · 탭해서 정리' : '${d.year}.${d.month} 등록 · 탭해서 비교', style: const TextStyle(fontSize: 12, color: C.warnInk)),
+            ]),
+          ),
+          IconButton(onPressed: onDismiss, icon: const Icon(Icons.close_rounded, size: 18, color: C.warnInk), tooltip: '닫기'),
+        ]),
+      ),
+    );
+  }
+}
+
+/// 기존 ↔ 새 명함 비교. 달라진 필드만. 반환: replace / drop / keep
+class _CompareSheet extends StatelessWidget {
+  const _CompareSheet({required this.old, required this.fresh, required this.diffs});
+  final Contact old;
+  final Contact fresh;
+  final List<(String, String, String)> diffs;
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    final same = diffs.isEmpty;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 14, 20, 16 + bottom),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: const Color(0xFFD5D8DE), borderRadius: BorderRadius.circular(3)))),
+        const SizedBox(height: 16),
+        Text(same ? '똑같은 명함이에요' : '달라진 정보 ${diffs.length}개', style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 4),
+        Text(same ? '방금 등록한 것을 지우고 기존 연락처를 그대로 둘게요.' : '교체하면 기존 메모·즐겨찾기는 그대로 두고 정보와 명함 이미지만 새것으로 바꿔요.',
+            style: const TextStyle(fontSize: 14, color: C.inkMuted)),
+        if (!same) ...[
+          const SizedBox(height: 16),
+          Container(
+            decoration: BoxDecoration(color: C.surfaceAlt, borderRadius: BorderRadius.circular(R.box)),
+            clipBehavior: Clip.antiAlias,
+            child: Column(children: [
+              for (final (i, d) in diffs.indexed)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(border: i == diffs.length - 1 ? null : const Border(bottom: BorderSide(color: Color(0xFFE9EBEF)))),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    SizedBox(width: 64, child: Text(d.$1, style: const TextStyle(fontSize: 13, color: C.inkMuted))),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(d.$2.isEmpty ? '—' : d.$2, style: const TextStyle(fontSize: 14, color: C.inkFaint, decoration: TextDecoration.lineThrough)),
+                        const SizedBox(height: 2),
+                        Text(d.$3.isEmpty ? '—' : d.$3, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.ink)),
+                      ]),
+                    ),
+                  ]),
+                ),
+            ]),
+          ),
+        ],
+        const SizedBox(height: 20),
+        Row(children: [
+          Expanded(
+            child: FilledButton(
+              onPressed: () => Navigator.pop(context, 'keep'),
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFF0F2F5), foregroundColor: C.ink, minimumSize: const Size.fromHeight(52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+              child: const Text('따로 둘게요', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 2,
+            child: FilledButton(
+              onPressed: () => Navigator.pop(context, same ? 'drop' : 'replace'),
+              style: FilledButton.styleFrom(backgroundColor: C.ink, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+              child: Text(same ? '중복 삭제' : '새 명함으로 교체', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ]),
       ]),
     );
   }

@@ -205,10 +205,16 @@ class _ListScreenState extends ConsumerState<ListScreen> {
         .then((r) { if (r == 'detail' && mounted) _openDetail(c); });
   }
 
+  /// 촬영 → 상세(저장됨). 상세에서 "다음 명함" 을 누르면 다시 촬영으로 — 여러 장 연속 등록.
   Future<void> _openCapture() async {
     _searchFocus.unfocus();
-    final id = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const CaptureScreen(), fullscreenDialog: true));
-    if (id != null && mounted) DetailSheet.show(context, id, justSaved: true);
+    while (true) {
+      if (!mounted) return;
+      final id = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const CaptureScreen(), fullscreenDialog: true));
+      if (id == null || !mounted) return;
+      final r = await DetailSheet.show(context, id, justSaved: true);
+      if (r != 'next') return;
+    }
   }
 
   Future<void> _openManual() async {
