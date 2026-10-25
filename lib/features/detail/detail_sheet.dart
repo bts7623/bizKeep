@@ -63,6 +63,11 @@ class _DetailSheetState extends ConsumerState<DetailSheet> {
                   ]),
                 ),
               const Spacer(),
+              IconButton(
+                onPressed: () => ref.read(repoProvider).setFavorite(contact.id, !contact.favorite),
+                tooltip: contact.favorite ? '즐겨찾기 해제' : '즐겨찾기',
+                icon: Icon(contact.favorite ? Icons.star_rounded : Icons.star_outline_rounded, color: contact.favorite ? const Color(0xFFF5B301) : C.inkMuted, size: 26),
+              ),
               IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, color: C.inkMuted), tooltip: '닫기'),
             ]),
           ),

@@ -17,7 +17,9 @@ import 'vision.dart';
 /// 명함 촬영. 프레임 안에서 명함 윤곽(사각형)이 검출되고 0.75초 안정되면 셔터 없이 자동 촬영.
 /// 촬영 → 원근 보정 크롭 → OCR → 즉시 저장 → 상세 (확인 단계 없음). 수동 셔터는 백업.
 class CaptureScreen extends ConsumerStatefulWidget {
-  const CaptureScreen({super.key});
+  const CaptureScreen({super.key, this.mine = false});
+  /// 내 명함 등록: OCR 없이 이미지만 저장 (목록에 안 나옴)
+  final bool mine;
   @override
   ConsumerState<CaptureScreen> createState() => _CaptureScreenState();
 }
@@ -151,6 +153,15 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> with WidgetsBindi
         if (!mounted) return;
         final rect = _guideRelativeRect(context, cam);
         saved = await ImageIo.processAndSave(await File(front).readAsBytes(), rect, id);
+      }
+
+      if (widget.mine) {
+        final mine = await ref.read(repoProvider).create(
+              name: '내 명함', imageFront: ImagePaths.toStored(saved.front), thumb: ImagePaths.toStored(saved.thumb), source: 'mine', isMine: true,
+            );
+        HapticFeedback.heavyImpact();
+        if (mounted) Navigator.pop(context, mine.id);
+        return;
       }
 
       // 2) OCR (네이티브, ~0.3s)

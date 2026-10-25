@@ -147,6 +147,25 @@ class $ContactsTable extends Contacts with TableInfo<$ContactsTable, Contact> {
   late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
       'updated_at', aliasedName, false,
       type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _favoriteMeta =
+      const VerificationMeta('favorite');
+  @override
+  late final GeneratedColumn<bool> favorite = GeneratedColumn<bool>(
+      'favorite', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("favorite" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _isMineMeta = const VerificationMeta('isMine');
+  @override
+  late final GeneratedColumn<bool> isMine = GeneratedColumn<bool>(
+      'is_mine', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_mine" IN (0, 1))'),
+      defaultValue: const Constant(false));
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -168,7 +187,9 @@ class $ContactsTable extends Contacts with TableInfo<$ContactsTable, Contact> {
         source,
         lowConfidence,
         createdAt,
-        updatedAt
+        updatedAt,
+        favorite,
+        isMine
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -275,6 +296,14 @@ class $ContactsTable extends Contacts with TableInfo<$ContactsTable, Contact> {
     } else if (isInserting) {
       context.missing(_updatedAtMeta);
     }
+    if (data.containsKey('favorite')) {
+      context.handle(_favoriteMeta,
+          favorite.isAcceptableOrUnknown(data['favorite']!, _favoriteMeta));
+    }
+    if (data.containsKey('is_mine')) {
+      context.handle(_isMineMeta,
+          isMine.isAcceptableOrUnknown(data['is_mine']!, _isMineMeta));
+    }
     return context;
   }
 
@@ -324,6 +353,10 @@ class $ContactsTable extends Contacts with TableInfo<$ContactsTable, Contact> {
           .read(DriftSqlType.int, data['${effectivePrefix}created_at'])!,
       updatedAt: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}updated_at'])!,
+      favorite: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}favorite'])!,
+      isMine: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_mine'])!,
     );
   }
 
@@ -354,6 +387,12 @@ class Contact extends DataClass implements Insertable<Contact> {
   final String lowConfidence;
   final int createdAt;
   final int updatedAt;
+
+  /// 즐겨찾기 (목록 상단 고정)
+  final bool favorite;
+
+  /// 내 명함 (목록·검색 제외, 내 명함 시트에서만)
+  final bool isMine;
   const Contact(
       {required this.id,
       required this.name,
@@ -374,7 +413,9 @@ class Contact extends DataClass implements Insertable<Contact> {
       required this.source,
       required this.lowConfidence,
       required this.createdAt,
-      required this.updatedAt});
+      required this.updatedAt,
+      required this.favorite,
+      required this.isMine});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -404,6 +445,8 @@ class Contact extends DataClass implements Insertable<Contact> {
     map['low_confidence'] = Variable<String>(lowConfidence);
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
+    map['favorite'] = Variable<bool>(favorite);
+    map['is_mine'] = Variable<bool>(isMine);
     return map;
   }
 
@@ -434,6 +477,8 @@ class Contact extends DataClass implements Insertable<Contact> {
       lowConfidence: Value(lowConfidence),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
+      favorite: Value(favorite),
+      isMine: Value(isMine),
     );
   }
 
@@ -461,6 +506,8 @@ class Contact extends DataClass implements Insertable<Contact> {
       lowConfidence: serializer.fromJson<String>(json['lowConfidence']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
+      favorite: serializer.fromJson<bool>(json['favorite']),
+      isMine: serializer.fromJson<bool>(json['isMine']),
     );
   }
   @override
@@ -487,6 +534,8 @@ class Contact extends DataClass implements Insertable<Contact> {
       'lowConfidence': serializer.toJson<String>(lowConfidence),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
+      'favorite': serializer.toJson<bool>(favorite),
+      'isMine': serializer.toJson<bool>(isMine),
     };
   }
 
@@ -510,7 +559,9 @@ class Contact extends DataClass implements Insertable<Contact> {
           String? source,
           String? lowConfidence,
           int? createdAt,
-          int? updatedAt}) =>
+          int? updatedAt,
+          bool? favorite,
+          bool? isMine}) =>
       Contact(
         id: id ?? this.id,
         name: name ?? this.name,
@@ -532,6 +583,8 @@ class Contact extends DataClass implements Insertable<Contact> {
         lowConfidence: lowConfidence ?? this.lowConfidence,
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
+        favorite: favorite ?? this.favorite,
+        isMine: isMine ?? this.isMine,
       );
   Contact copyWithCompanion(ContactsCompanion data) {
     return Contact(
@@ -561,6 +614,8 @@ class Contact extends DataClass implements Insertable<Contact> {
           : this.lowConfidence,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      favorite: data.favorite.present ? data.favorite.value : this.favorite,
+      isMine: data.isMine.present ? data.isMine.value : this.isMine,
     );
   }
 
@@ -586,33 +641,38 @@ class Contact extends DataClass implements Insertable<Contact> {
           ..write('source: $source, ')
           ..write('lowConfidence: $lowConfidence, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('favorite: $favorite, ')
+          ..write('isMine: $isMine')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
-      id,
-      name,
-      company,
-      department,
-      title,
-      phoneMobile,
-      phoneOffice,
-      fax,
-      email,
-      address,
-      website,
-      memo,
-      imageFront,
-      imageBack,
-      thumb,
-      ocrRaw,
-      source,
-      lowConfidence,
-      createdAt,
-      updatedAt);
+  int get hashCode => Object.hashAll([
+        id,
+        name,
+        company,
+        department,
+        title,
+        phoneMobile,
+        phoneOffice,
+        fax,
+        email,
+        address,
+        website,
+        memo,
+        imageFront,
+        imageBack,
+        thumb,
+        ocrRaw,
+        source,
+        lowConfidence,
+        createdAt,
+        updatedAt,
+        favorite,
+        isMine
+      ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -636,7 +696,9 @@ class Contact extends DataClass implements Insertable<Contact> {
           other.source == this.source &&
           other.lowConfidence == this.lowConfidence &&
           other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.favorite == this.favorite &&
+          other.isMine == this.isMine);
 }
 
 class ContactsCompanion extends UpdateCompanion<Contact> {
@@ -660,6 +722,8 @@ class ContactsCompanion extends UpdateCompanion<Contact> {
   final Value<String> lowConfidence;
   final Value<int> createdAt;
   final Value<int> updatedAt;
+  final Value<bool> favorite;
+  final Value<bool> isMine;
   final Value<int> rowid;
   const ContactsCompanion({
     this.id = const Value.absent(),
@@ -682,6 +746,8 @@ class ContactsCompanion extends UpdateCompanion<Contact> {
     this.lowConfidence = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.favorite = const Value.absent(),
+    this.isMine = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ContactsCompanion.insert({
@@ -705,6 +771,8 @@ class ContactsCompanion extends UpdateCompanion<Contact> {
     this.lowConfidence = const Value.absent(),
     required int createdAt,
     required int updatedAt,
+    this.favorite = const Value.absent(),
+    this.isMine = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : id = Value(id),
         createdAt = Value(createdAt),
@@ -730,6 +798,8 @@ class ContactsCompanion extends UpdateCompanion<Contact> {
     Expression<String>? lowConfidence,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
+    Expression<bool>? favorite,
+    Expression<bool>? isMine,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -753,6 +823,8 @@ class ContactsCompanion extends UpdateCompanion<Contact> {
       if (lowConfidence != null) 'low_confidence': lowConfidence,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (favorite != null) 'favorite': favorite,
+      if (isMine != null) 'is_mine': isMine,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -778,6 +850,8 @@ class ContactsCompanion extends UpdateCompanion<Contact> {
       Value<String>? lowConfidence,
       Value<int>? createdAt,
       Value<int>? updatedAt,
+      Value<bool>? favorite,
+      Value<bool>? isMine,
       Value<int>? rowid}) {
     return ContactsCompanion(
       id: id ?? this.id,
@@ -800,6 +874,8 @@ class ContactsCompanion extends UpdateCompanion<Contact> {
       lowConfidence: lowConfidence ?? this.lowConfidence,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      favorite: favorite ?? this.favorite,
+      isMine: isMine ?? this.isMine,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -867,6 +943,12 @@ class ContactsCompanion extends UpdateCompanion<Contact> {
     if (updatedAt.present) {
       map['updated_at'] = Variable<int>(updatedAt.value);
     }
+    if (favorite.present) {
+      map['favorite'] = Variable<bool>(favorite.value);
+    }
+    if (isMine.present) {
+      map['is_mine'] = Variable<bool>(isMine.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -896,6 +978,200 @@ class ContactsCompanion extends UpdateCompanion<Contact> {
           ..write('lowConfidence: $lowConfidence, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('favorite: $favorite, ')
+          ..write('isMine: $isMine, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CompanyPrefsTable extends CompanyPrefs
+    with TableInfo<$CompanyPrefsTable, CompanyPref> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CompanyPrefsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _keyMeta = const VerificationMeta('key');
+  @override
+  late final GeneratedColumn<String> key = GeneratedColumn<String>(
+      'key', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _favoriteMeta =
+      const VerificationMeta('favorite');
+  @override
+  late final GeneratedColumn<bool> favorite = GeneratedColumn<bool>(
+      'favorite', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("favorite" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  @override
+  List<GeneratedColumn> get $columns => [key, favorite];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'company_prefs';
+  @override
+  VerificationContext validateIntegrity(Insertable<CompanyPref> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('key')) {
+      context.handle(
+          _keyMeta, key.isAcceptableOrUnknown(data['key']!, _keyMeta));
+    } else if (isInserting) {
+      context.missing(_keyMeta);
+    }
+    if (data.containsKey('favorite')) {
+      context.handle(_favoriteMeta,
+          favorite.isAcceptableOrUnknown(data['favorite']!, _favoriteMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {key};
+  @override
+  CompanyPref map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CompanyPref(
+      key: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}key'])!,
+      favorite: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}favorite'])!,
+    );
+  }
+
+  @override
+  $CompanyPrefsTable createAlias(String alias) {
+    return $CompanyPrefsTable(attachedDatabase, alias);
+  }
+}
+
+class CompanyPref extends DataClass implements Insertable<CompanyPref> {
+  final String key;
+  final bool favorite;
+  const CompanyPref({required this.key, required this.favorite});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['key'] = Variable<String>(key);
+    map['favorite'] = Variable<bool>(favorite);
+    return map;
+  }
+
+  CompanyPrefsCompanion toCompanion(bool nullToAbsent) {
+    return CompanyPrefsCompanion(
+      key: Value(key),
+      favorite: Value(favorite),
+    );
+  }
+
+  factory CompanyPref.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CompanyPref(
+      key: serializer.fromJson<String>(json['key']),
+      favorite: serializer.fromJson<bool>(json['favorite']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'key': serializer.toJson<String>(key),
+      'favorite': serializer.toJson<bool>(favorite),
+    };
+  }
+
+  CompanyPref copyWith({String? key, bool? favorite}) => CompanyPref(
+        key: key ?? this.key,
+        favorite: favorite ?? this.favorite,
+      );
+  CompanyPref copyWithCompanion(CompanyPrefsCompanion data) {
+    return CompanyPref(
+      key: data.key.present ? data.key.value : this.key,
+      favorite: data.favorite.present ? data.favorite.value : this.favorite,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CompanyPref(')
+          ..write('key: $key, ')
+          ..write('favorite: $favorite')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(key, favorite);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CompanyPref &&
+          other.key == this.key &&
+          other.favorite == this.favorite);
+}
+
+class CompanyPrefsCompanion extends UpdateCompanion<CompanyPref> {
+  final Value<String> key;
+  final Value<bool> favorite;
+  final Value<int> rowid;
+  const CompanyPrefsCompanion({
+    this.key = const Value.absent(),
+    this.favorite = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CompanyPrefsCompanion.insert({
+    required String key,
+    this.favorite = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : key = Value(key);
+  static Insertable<CompanyPref> custom({
+    Expression<String>? key,
+    Expression<bool>? favorite,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (key != null) 'key': key,
+      if (favorite != null) 'favorite': favorite,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CompanyPrefsCompanion copyWith(
+      {Value<String>? key, Value<bool>? favorite, Value<int>? rowid}) {
+    return CompanyPrefsCompanion(
+      key: key ?? this.key,
+      favorite: favorite ?? this.favorite,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (key.present) {
+      map['key'] = Variable<String>(key.value);
+    }
+    if (favorite.present) {
+      map['favorite'] = Variable<bool>(favorite.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CompanyPrefsCompanion(')
+          ..write('key: $key, ')
+          ..write('favorite: $favorite, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -906,11 +1182,12 @@ abstract class _$AppDb extends GeneratedDatabase {
   _$AppDb(QueryExecutor e) : super(e);
   $AppDbManager get managers => $AppDbManager(this);
   late final $ContactsTable contacts = $ContactsTable(this);
+  late final $CompanyPrefsTable companyPrefs = $CompanyPrefsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [contacts];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [contacts, companyPrefs];
 }
 
 typedef $$ContactsTableCreateCompanionBuilder = ContactsCompanion Function({
@@ -934,6 +1211,8 @@ typedef $$ContactsTableCreateCompanionBuilder = ContactsCompanion Function({
   Value<String> lowConfidence,
   required int createdAt,
   required int updatedAt,
+  Value<bool> favorite,
+  Value<bool> isMine,
   Value<int> rowid,
 });
 typedef $$ContactsTableUpdateCompanionBuilder = ContactsCompanion Function({
@@ -957,6 +1236,8 @@ typedef $$ContactsTableUpdateCompanionBuilder = ContactsCompanion Function({
   Value<String> lowConfidence,
   Value<int> createdAt,
   Value<int> updatedAt,
+  Value<bool> favorite,
+  Value<bool> isMine,
   Value<int> rowid,
 });
 
@@ -1027,6 +1308,12 @@ class $$ContactsTableFilterComposer extends Composer<_$AppDb, $ContactsTable> {
 
   ColumnFilters<int> get updatedAt => $composableBuilder(
       column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get favorite => $composableBuilder(
+      column: $table.favorite, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isMine => $composableBuilder(
+      column: $table.isMine, builder: (column) => ColumnFilters(column));
 }
 
 class $$ContactsTableOrderingComposer
@@ -1098,6 +1385,12 @@ class $$ContactsTableOrderingComposer
 
   ColumnOrderings<int> get updatedAt => $composableBuilder(
       column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get favorite => $composableBuilder(
+      column: $table.favorite, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isMine => $composableBuilder(
+      column: $table.isMine, builder: (column) => ColumnOrderings(column));
 }
 
 class $$ContactsTableAnnotationComposer
@@ -1168,6 +1461,12 @@ class $$ContactsTableAnnotationComposer
 
   GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get favorite =>
+      $composableBuilder(column: $table.favorite, builder: (column) => column);
+
+  GeneratedColumn<bool> get isMine =>
+      $composableBuilder(column: $table.isMine, builder: (column) => column);
 }
 
 class $$ContactsTableTableManager extends RootTableManager<
@@ -1213,6 +1512,8 @@ class $$ContactsTableTableManager extends RootTableManager<
             Value<String> lowConfidence = const Value.absent(),
             Value<int> createdAt = const Value.absent(),
             Value<int> updatedAt = const Value.absent(),
+            Value<bool> favorite = const Value.absent(),
+            Value<bool> isMine = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               ContactsCompanion(
@@ -1236,6 +1537,8 @@ class $$ContactsTableTableManager extends RootTableManager<
             lowConfidence: lowConfidence,
             createdAt: createdAt,
             updatedAt: updatedAt,
+            favorite: favorite,
+            isMine: isMine,
             rowid: rowid,
           ),
           createCompanionCallback: ({
@@ -1259,6 +1562,8 @@ class $$ContactsTableTableManager extends RootTableManager<
             Value<String> lowConfidence = const Value.absent(),
             required int createdAt,
             required int updatedAt,
+            Value<bool> favorite = const Value.absent(),
+            Value<bool> isMine = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               ContactsCompanion.insert(
@@ -1282,6 +1587,8 @@ class $$ContactsTableTableManager extends RootTableManager<
             lowConfidence: lowConfidence,
             createdAt: createdAt,
             updatedAt: updatedAt,
+            favorite: favorite,
+            isMine: isMine,
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0
@@ -1307,10 +1614,138 @@ typedef $$ContactsTableProcessedTableManager = ProcessedTableManager<
     (Contact, BaseReferences<_$AppDb, $ContactsTable, Contact>),
     Contact,
     PrefetchHooks Function()>;
+typedef $$CompanyPrefsTableCreateCompanionBuilder = CompanyPrefsCompanion
+    Function({
+  required String key,
+  Value<bool> favorite,
+  Value<int> rowid,
+});
+typedef $$CompanyPrefsTableUpdateCompanionBuilder = CompanyPrefsCompanion
+    Function({
+  Value<String> key,
+  Value<bool> favorite,
+  Value<int> rowid,
+});
+
+class $$CompanyPrefsTableFilterComposer
+    extends Composer<_$AppDb, $CompanyPrefsTable> {
+  $$CompanyPrefsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get key => $composableBuilder(
+      column: $table.key, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get favorite => $composableBuilder(
+      column: $table.favorite, builder: (column) => ColumnFilters(column));
+}
+
+class $$CompanyPrefsTableOrderingComposer
+    extends Composer<_$AppDb, $CompanyPrefsTable> {
+  $$CompanyPrefsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get key => $composableBuilder(
+      column: $table.key, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get favorite => $composableBuilder(
+      column: $table.favorite, builder: (column) => ColumnOrderings(column));
+}
+
+class $$CompanyPrefsTableAnnotationComposer
+    extends Composer<_$AppDb, $CompanyPrefsTable> {
+  $$CompanyPrefsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get key =>
+      $composableBuilder(column: $table.key, builder: (column) => column);
+
+  GeneratedColumn<bool> get favorite =>
+      $composableBuilder(column: $table.favorite, builder: (column) => column);
+}
+
+class $$CompanyPrefsTableTableManager extends RootTableManager<
+    _$AppDb,
+    $CompanyPrefsTable,
+    CompanyPref,
+    $$CompanyPrefsTableFilterComposer,
+    $$CompanyPrefsTableOrderingComposer,
+    $$CompanyPrefsTableAnnotationComposer,
+    $$CompanyPrefsTableCreateCompanionBuilder,
+    $$CompanyPrefsTableUpdateCompanionBuilder,
+    (CompanyPref, BaseReferences<_$AppDb, $CompanyPrefsTable, CompanyPref>),
+    CompanyPref,
+    PrefetchHooks Function()> {
+  $$CompanyPrefsTableTableManager(_$AppDb db, $CompanyPrefsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CompanyPrefsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CompanyPrefsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CompanyPrefsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> key = const Value.absent(),
+            Value<bool> favorite = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              CompanyPrefsCompanion(
+            key: key,
+            favorite: favorite,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String key,
+            Value<bool> favorite = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              CompanyPrefsCompanion.insert(
+            key: key,
+            favorite: favorite,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (
+                    e.readTable<$CompanyPrefsTable, CompanyPref>(table),
+                    BaseReferences<_$AppDb, $CompanyPrefsTable, CompanyPref>(
+                        db, table, e)
+                  ))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$CompanyPrefsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDb,
+    $CompanyPrefsTable,
+    CompanyPref,
+    $$CompanyPrefsTableFilterComposer,
+    $$CompanyPrefsTableOrderingComposer,
+    $$CompanyPrefsTableAnnotationComposer,
+    $$CompanyPrefsTableCreateCompanionBuilder,
+    $$CompanyPrefsTableUpdateCompanionBuilder,
+    (CompanyPref, BaseReferences<_$AppDb, $CompanyPrefsTable, CompanyPref>),
+    CompanyPref,
+    PrefetchHooks Function()>;
 
 class $AppDbManager {
   final _$AppDb _db;
   $AppDbManager(this._db);
   $$ContactsTableTableManager get contacts =>
       $$ContactsTableTableManager(_db, _db.contacts);
+  $$CompanyPrefsTableTableManager get companyPrefs =>
+      $$CompanyPrefsTableTableManager(_db, _db.companyPrefs);
 }

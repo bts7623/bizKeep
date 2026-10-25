@@ -22,7 +22,8 @@ class _CardViewScreenState extends ConsumerState<CardViewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final c = ref.watch(contactsProvider).value?.where((x) => x.id == widget.contactId).firstOrNull;
+    final c = ref.watch(contactsProvider).value?.where((x) => x.id == widget.contactId).firstOrNull ??
+        ref.watch(myCardsProvider).value?.where((x) => x.id == widget.contactId).firstOrNull;
     if (c == null) return const Scaffold(backgroundColor: Color(0xFF0B0C10));
     final images = [c.imageFront, c.imageBack].whereType<String>().map(ImagePaths.resolve).toList();
     final pad = MediaQuery.paddingOf(context);
@@ -75,6 +76,9 @@ class _CardViewScreenState extends ConsumerState<CardViewScreen> {
                   ),
               ]),
             const SizedBox(height: 16),
+            if (c.isMine)
+              _GlassBar(icon: Icons.ios_share_rounded, label: '공유 · 저장', onTap: () => Act.shareImages(images))
+            else
             Row(children: [
               Expanded(
                 child: _GlassBar(
@@ -98,7 +102,7 @@ class _CardViewScreenState extends ConsumerState<CardViewScreen> {
               ),
             ]),
             const SizedBox(height: 14),
-            Text(images.length > 1 ? '두 손가락으로 확대 · 옆으로 넘기면 뒷면' : '두 손가락으로 확대', style: const TextStyle(color: Color(0xFF9AA0AA), fontSize: 12)),
+            Text(c.isMine ? '공유 시트에서 이미지 저장·복사·전송' : (images.length > 1 ? '두 손가락으로 확대 · 옆으로 넘기면 뒷면' : '두 손가락으로 확대'), style: const TextStyle(color: Color(0xFF9AA0AA), fontSize: 12)),
           ]),
         ),
       ]),

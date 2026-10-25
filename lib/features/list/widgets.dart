@@ -5,7 +5,7 @@ import '../../data/contact_repo.dart';
 import '../../data/db.dart';
 import 'list_screen.dart';
 
-/// 목록 행. 메모가 있으면 3줄, 없으면 2줄.
+/// 목록 행. 메모가 있으면 3줄(높이 [heightWithSub]), 없으면 2줄([heightPlain]) — 인덱스 점프 계산용 고정 높이.
 class ContactRow extends StatelessWidget {
   const ContactRow({
     super.key,
@@ -15,6 +15,7 @@ class ContactRow extends StatelessWidget {
     required this.onCall,
     this.onCallLong,
     this.hint,
+    this.indent = false,
   });
   final Contact contact;
   final String? hint;
@@ -22,6 +23,11 @@ class ContactRow extends StatelessWidget {
   final VoidCallback onThumbTap;
   final VoidCallback onCall;
   final VoidCallback? onCallLong;
+  final bool indent;
+
+  static const double heightPlain = 66;
+  static const double heightWithSub = 88;
+  static double heightOf(Contact c, {String? hint}) => (hint != null || c.memo.isNotEmpty) ? heightWithSub : heightPlain;
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +35,8 @@ class ContactRow extends StatelessWidget {
     final sub = hint ?? (memo.isNotEmpty ? memo : null);
     final subIsHint = hint != null;
     return Container(
+      height: heightOf(contact, hint: hint),
+      margin: indent ? const EdgeInsets.only(left: 14) : null,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(R.row), boxShadow: rowShadow),
       child: Row(
@@ -44,9 +52,9 @@ class ContactRow extends StatelessWidget {
               onTap: onTap,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(contact.company.isEmpty ? '소속 없음' : contact.company,
+                  Text(indent ? (contact.department.isEmpty ? ' ' : contact.department) : (contact.company.isEmpty ? '소속 없음' : contact.company),
                       maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: C.inkMuted)),
                   const SizedBox(height: 2),
                   Text.rich(
@@ -229,6 +237,105 @@ class SmallActionButton extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(width: 36, height: 36, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: Icon(icon, size: 18, color: C.accent)),
+      ),
+    );
+  }
+}
+
+/// 섹션 구분 헤더 (월 · 초성 · 즐겨찾기)
+class SectionHeader extends StatelessWidget {
+  const SectionHeader({super.key, required this.label});
+  final String label;
+  static const double height = 30;
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: height,
+        child: Align(
+          alignment: Alignment.bottomLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 6, bottom: 4),
+            child: Row(children: [
+              if (label == '즐겨찾기') const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.star_rounded, size: 14, color: C.accent)),
+              Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: C.inkMuted, letterSpacing: 0.2)),
+            ]),
+          ),
+        ),
+      );
+}
+
+/// 회사 트리 헤더: 탭하면 접었다 펴기, 별로 회사 즐겨찾기.
+class CompanyHeader extends StatelessWidget {
+  const CompanyHeader({super.key, required this.name, required this.count, required this.expanded, required this.favorite, required this.onTap, required this.onStar});
+  final String name;
+  final int count;
+  final bool expanded;
+  final bool favorite;
+  final VoidCallback onTap;
+  final VoidCallback onStar;
+  static const double height = 52;
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: height,
+        padding: const EdgeInsets.only(left: 14, right: 4),
+        decoration: BoxDecoration(
+          color: expanded ? C.ink : Colors.white.withValues(alpha: 0.75),
+          borderRadius: BorderRadius.circular(R.row),
+          border: Border.all(color: expanded ? C.ink : Colors.white.withValues(alpha: 0.9)),
+        ),
+        child: Row(children: [
+          AnimatedRotation(
+            turns: expanded ? 0.25 : 0,
+            duration: const Duration(milliseconds: 150),
+            child: Icon(Icons.chevron_right_rounded, size: 22, color: expanded ? Colors.white70 : C.inkMuted),
+          ),
+          const SizedBox(width: 6),
+          Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: expanded ? Colors.white : C.ink))),
+          Text('$count명', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: expanded ? Colors.white70 : C.inkMuted)),
+          IconButton(
+            onPressed: onStar,
+            tooltip: favorite ? '회사 즐겨찾기 해제' : '회사 즐겨찾기',
+            icon: Icon(favorite ? Icons.star_rounded : Icons.star_outline_rounded, size: 22, color: favorite ? const Color(0xFFF5B301) : (expanded ? Colors.white54 : C.inkFaint)),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// 이름순 인덱스 바 (ㄱ~ㅎ·A~Z·#). 드래그/탭으로 점프.
+class IndexBar extends StatelessWidget {
+  const IndexBar({super.key, required this.keys, required this.onSelect});
+  final List<String> keys;
+  final ValueChanged<String> onSelect;
+
+  void _hit(Offset local, double itemH) {
+    final i = (local.dy / itemH).floor().clamp(0, keys.length - 1);
+    onSelect(keys[i]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (keys.isEmpty) return const SizedBox.shrink();
+    const itemH = 17.0;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (d) => _hit(d.localPosition, itemH),
+      onVerticalDragUpdate: (d) => _hit(d.localPosition, itemH),
+      child: Container(
+        width: 24,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(12)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final k in keys)
+              SizedBox(height: itemH, child: Center(child: Text(k, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: C.accent)))),
+          ],
+        ),
       ),
     );
   }

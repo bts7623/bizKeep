@@ -31,11 +31,15 @@ void main() {
       ('한지우', '제니퍼소프트', '대리', '010-7777-8888', '', 'jw.han@jennifersoft.com', '경기 파주시', ''),
       ('오세훈', '조달청', '주무관', '010-4444-5555', '042-481-7000', 'sh.oh@korea.kr', '대전 서구 청사로 189', '나라장터 공고 문의 창구'),
       ('윤재호', '(주)에이스정보', '이사', '010-3333-9999', '02-777-8888', 'jh.yoon@aceinfo.co.kr', '서울 강남구 역삼동', ''),
+      ('강민호', '폭스소프트', '차장', '010-6666-1111', '', 'mh.kang@foxsoft.co.kr', '', ''),
+      ('송지민', '교육부', '주무관', '010-8888-2222', '', 'jm.song@korea.kr', '', '시설 예산 담당'),
     ];
     for (final s in samples.reversed) {
-      await repo.create(name: s.$1, company: s.$2, title: s.$3, phoneMobile: s.$4, phoneOffice: s.$5, email: s.$6, address: s.$7, memo: s.$8);
+      final c = await repo.create(name: s.$1, company: s.$2, title: s.$3, phoneMobile: s.$4, phoneOffice: s.$5, email: s.$6, address: s.$7, memo: s.$8);
+      if (s.$1 == '정하늘') await repo.setFavorite(c.id, true);
       await Future<void>.delayed(const Duration(milliseconds: 5));
     }
+    await repo.setCompanyFavorite('교육부', true);
 
     await t.pumpWidget(UncontrolledProviderScope(container: container, child: const BizKeepApp()));
     await t.pumpAndSettle(const Duration(seconds: 1));
@@ -99,5 +103,32 @@ void main() {
     await t.drag(find.byType(CustomScrollView), const Offset(0, 120));
     await t.pumpAndSettle();
     await shot(t, '12_scroll_back_header_shown');
+    await t.drag(find.byType(CustomScrollView), const Offset(0, 800));
+    await t.pumpAndSettle();
+
+    // 이름순: 초성 구분 + 인덱스 바
+    await t.tap(find.text('이름순'));
+    await shot(t, '13_sort_name_index');
+    await t.tap(find.text('ㅊ').last);
+    await shot(t, '14_index_jump');
+    await t.drag(find.byType(CustomScrollView), const Offset(0, 1500));
+    await t.pumpAndSettle();
+
+    // 회사순: 트리 (교육부는 즐겨찾기라 펼침, 폭스소프트는 접힘)
+    await t.tap(find.text('회사순'));
+    await shot(t, '15_sort_company_tree');
+    await t.scrollUntilVisible(find.text('폭스소프트'), 200, scrollable: find.byType(Scrollable).first);
+    await t.tap(find.text('폭스소프트'));
+    await shot(t, '16_company_expanded');
+
+    // 내 명함 (비어 있음)
+    await t.drag(find.byType(CustomScrollView), const Offset(0, 1500));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('내 명함'));
+    await shot(t, '17_my_cards_empty');
+    await t.tap(find.byIcon(Icons.close_rounded).first);
+    await t.pumpAndSettle();
+    await t.tap(find.text('최근 등록'));
+    await t.pumpAndSettle();
   });
 }

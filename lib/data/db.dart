@@ -28,18 +28,31 @@ class Contacts extends Table {
   TextColumn get lowConfidence => text().withDefault(const Constant('[]'))();
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
+  /// 즐겨찾기 (목록 상단 고정)
+  BoolColumn get favorite => boolean().withDefault(const Constant(false))();
+  /// 내 명함 (목록·검색 제외, 내 명함 시트에서만)
+  BoolColumn get isMine => boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [Contacts])
+/// 회사 단위 설정 (즐겨찾기). key 는 ContactRepo.companyKey() 정규화 값.
+class CompanyPrefs extends Table {
+  TextColumn get key => text()();
+  BoolColumn get favorite => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {key};
+}
+
+@DriftDatabase(tables: [Contacts, CompanyPrefs])
 class AppDb extends _$AppDb {
   AppDb() : super(_open());
   AppDb.test(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -50,6 +63,13 @@ class AppDb extends _$AppDb {
           await customStatement('CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts(company)');
           // 통화 식별 익스텐션용 번호 인덱스 (E.164)
           await customStatement('CREATE TABLE IF NOT EXISTS phone_index (phone_e164 TEXT PRIMARY KEY, contact_id TEXT NOT NULL)');
+        },
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.addColumn(contacts, contacts.favorite);
+            await m.addColumn(contacts, contacts.isMine);
+            await m.createTable(companyPrefs);
+          }
         },
         beforeOpen: (d) async {
           await customStatement('PRAGMA journal_mode=WAL');

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/actions.dart';
@@ -14,6 +15,7 @@ import '../capture/capture_screen.dart';
 import '../detail/card_view_screen.dart';
 import '../detail/detail_sheet.dart';
 import '../edit/edit_screen.dart';
+import '../mycard/my_cards_sheet.dart';
 import '../settings/settings_screen.dart';
 import 'widgets.dart';
 
@@ -26,21 +28,47 @@ class ListScreen extends ConsumerStatefulWidget {
 class _ListScreenState extends ConsumerState<ListScreen> {
   final _searchCtrl = TextEditingController();
   final _searchFocus = FocusNode();
+  final _scroll = ScrollController();
+
+  static const _gap = 10.0;
+  static const _listTop = 4.0;
 
   @override
   void dispose() {
     _searchCtrl.dispose();
     _searchFocus.dispose();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  static double _entryHeight(ListEntry e) => switch (e) {
+        ContactEntry(:final contact, :final hint) => ContactRow.heightOf(contact, hint: hint),
+        SectionEntry() => SectionHeader.height,
+        CompanyEntry() => CompanyHeader.height,
+      };
+
+  /// 이름순 인덱스 점프: 고정 높이 합산으로 오프셋 계산 (헤더가 접힌 상태 기준)
+  void _jumpToIndex(List<ListEntry> items, String key, double base) {
+    var off = base + _listTop;
+    for (final e in items) {
+      if (e is SectionEntry && e.indexKey == key) break;
+      off += _entryHeight(e) + _gap;
+    }
+    if (!_scroll.hasClients) return;
+    _scroll.jumpTo(off.clamp(0, _scroll.position.maxScrollExtent));
+    HapticFeedback.selectionClick();
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = ref.watch(visibleListProvider);
+    final items = ref.watch(visibleEntriesProvider);
     final total = ref.watch(contactsProvider).value?.length ?? 0;
     final searching = ref.watch(searchQueryProvider).trim().isNotEmpty;
+    final sort = ref.watch(sortModeProvider);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top;
+    final showIndex = !searching && sort == SortMode.name && total > 0;
+    final indexKeys = showIndex ? [for (final e in items) if (e is SectionEntry && e.indexKey != null) e.indexKey!] : const <String>[];
 
     return Scaffold(
       body: Container(
@@ -53,6 +81,7 @@ class _ListScreenState extends ConsumerState<ListScreen> {
               behavior: HitTestBehavior.translucent,
               onTap: () => _searchFocus.unfocus(),
               child: CustomScrollView(
+                controller: _scroll,
                 keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                 slivers: [
                   // 위로 올리면 숨고, 내리면 즉시 나타나는 헤더
@@ -86,27 +115,21 @@ class _ListScreenState extends ConsumerState<ListScreen> {
                     const SliverFillRemaining(hasScrollBody: false, child: _NoResult())
                   else
                     SliverPadding(
-                      padding: EdgeInsets.fromLTRB(20, 4, 20, 120 + bottomInset),
+                      padding: EdgeInsets.fromLTRB(20, _listTop, showIndex ? 44 : 20, 120 + bottomInset),
                       sliver: SliverList.separated(
                         itemCount: items.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (context, i) {
-                          final it = items[i];
-                          return ContactRow(
-                            key: ValueKey(it.contact.id),
-                            contact: it.contact,
-                            hint: it.hint,
-                            onTap: () => _openDetail(it.contact),
-                            onThumbTap: () => _openCard(it.contact),
-                            onCall: () => Act.call(it.contact.primaryPhone),
-                            onCallLong: it.contact.phoneOffice.isNotEmpty ? () => Act.call(it.contact.phoneOffice) : null,
-                          );
-                        },
+                        separatorBuilder: (_, __) => const SizedBox(height: _gap),
+                        itemBuilder: (context, i) => _buildEntry(items[i]),
                       ),
                     ),
                 ],
               ),
             ),
+            if (showIndex)
+              Positioned(
+                right: 6, top: 0, bottom: 120 + bottomInset,
+                child: Center(child: IndexBar(keys: indexKeys, onSelect: (k) => _jumpToIndex(items, k, topInset + _Header.height))),
+              ),
             // 하단 페이드
             Positioned(
               left: 0, right: 0, bottom: 0, height: 150,
@@ -141,6 +164,34 @@ class _ListScreenState extends ConsumerState<ListScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildEntry(ListEntry e) {
+    switch (e) {
+      case ContactEntry(:final contact, :final hint, :final indent):
+        return ContactRow(
+          key: ValueKey(contact.id),
+          contact: contact,
+          hint: hint,
+          indent: indent,
+          onTap: () => _openDetail(contact),
+          onThumbTap: () => _openCard(contact),
+          onCall: () => Act.call(contact.primaryPhone),
+          onCallLong: contact.phoneOffice.isNotEmpty ? () => Act.call(contact.phoneOffice) : null,
+        );
+      case SectionEntry(:final label):
+        return SectionHeader(key: ValueKey('s:$label'), label: label);
+      case CompanyEntry(:final key, :final name, :final count, :final expanded, :final favorite):
+        return CompanyHeader(
+          key: ValueKey('c:$key'),
+          name: name, count: count, expanded: expanded, favorite: favorite,
+          onTap: () {
+            final n = ref.read(expandedCompaniesProvider.notifier);
+            n.state = expanded ? ({...n.state}..remove(key)) : {...n.state, key};
+          },
+          onStar: () => ref.read(repoProvider).setCompanyFavorite(key, !favorite),
+        );
+    }
   }
 
   void _openDetail(Contact c) => DetailSheet.show(context, c.id);
@@ -216,6 +267,12 @@ class _Header extends ConsumerWidget {
                   ],
                 ),
               ),
+              GlassCircleButton(
+                icon: Icons.badge_outlined,
+                label: '내 명함',
+                onTap: () => MyCardsSheet.show(context),
+              ),
+              const SizedBox(width: 8),
               GlassCircleButton(
                 icon: Icons.settings_outlined,
                 label: '설정',
