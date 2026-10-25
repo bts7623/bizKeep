@@ -85,6 +85,10 @@ void main() {
 
     // + 메뉴
     await t.tap(find.bySemanticsLabel('명함 등록'));
+    await t.pump(const Duration(milliseconds: 90));
+    await binding.takeScreenshot('08a_add_menu_anim_90ms');
+    await t.pump(const Duration(milliseconds: 80));
+    await binding.takeScreenshot('08b_add_menu_anim_170ms');
     await t.pump(const Duration(milliseconds: 400));
     await shot(t, '08_add_menu');
     await t.tap(find.text('직접 입력'));

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -230,12 +231,14 @@ class _ListScreenState extends ConsumerState<ListScreen> {
       barrierDismissible: true,
       barrierLabel: '닫기',
       barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 180),
+      transitionDuration: const Duration(milliseconds: 260),
       pageBuilder: (ctx, a1, a2) => _AddMenu(
+        animation: a1,
         onCapture: () { Navigator.pop(ctx); _openCapture(); },
         onManual: () { Navigator.pop(ctx); _openManual(); },
       ),
-      transitionBuilder: (ctx, a, _, child) => FadeTransition(opacity: a, child: child),
+      // 전환은 _AddMenu 안에서 요소별로 처리 (스크림 페이드, + 회전, 항목 위로 떠오름)
+      transitionBuilder: (ctx, a, _, child) => child,
     );
   }
 }
@@ -378,14 +381,24 @@ class _Dock extends StatelessWidget {
   }
 }
 
+/// + 메뉴. 열릴 때: 스크림 페이드 → + 가 135° 돌며 X 로(색 반전) → 항목들이 + 위치에서 위로 떠오름(아래 것부터).
+/// 닫힐 때는 같은 애니메이션을 거꾸로.
 class _AddMenu extends StatelessWidget {
-  const _AddMenu({required this.onCapture, required this.onManual});
+  const _AddMenu({required this.animation, required this.onCapture, required this.onManual});
+  final Animation<double> animation;
   final VoidCallback onCapture;
   final VoidCallback onManual;
 
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final scrim = CurvedAnimation(parent: animation, curve: Curves.easeOut);
+    final spin = CurvedAnimation(parent: animation, curve: Curves.easeOutBack, reverseCurve: Curves.easeIn);
+    // 아래 항목(직접 입력)이 먼저, 위 항목(명함 촬영)이 살짝 늦게
+    Animation<double> rise(double start) => CurvedAnimation(parent: animation, curve: Interval(start, 1, curve: Curves.easeOutBack), reverseCurve: Interval(0, 1 - start, curve: Curves.easeIn));
+    final riseManual = rise(0.05);
+    final riseCapture = rise(0.2);
+
     return Material(
       color: Colors.transparent,
       child: Stack(
@@ -393,33 +406,48 @@ class _AddMenu extends StatelessWidget {
           Positioned.fill(
             child: GestureDetector(
               onTap: () => Navigator.pop(context),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                child: Container(color: C.ink.withValues(alpha: 0.35)),
+              child: FadeTransition(
+                opacity: scrim,
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                  child: Container(color: C.ink.withValues(alpha: 0.35)),
+                ),
               ),
             ),
           ),
-          // 스피드 다이얼: + 바로 위, 같은 세로축. 라벨은 박스 없이 흰 글자 + 그림자 (디자인 시안 B-1)
+          // 항목: + 버튼 자리에서 출발해 제자리로 올라오며 커지고 나타남
           Positioned(
             right: 16, bottom: 88 + bottom,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                SpeedDialItem(icon: Icons.photo_camera_outlined, dark: true, label: '명함 촬영', onTap: onCapture),
+                _Rise(t: riseCapture, fromBelow: 56.0 + 14 + 56 + 76, child: SpeedDialItem(icon: Icons.photo_camera_outlined, dark: true, label: '명함 촬영', onTap: onCapture)),
                 const SizedBox(height: 14),
-                SpeedDialItem(icon: Icons.edit_outlined, dark: false, label: '직접 입력', onTap: onManual),
+                _Rise(t: riseManual, fromBelow: 76, child: SpeedDialItem(icon: Icons.edit_outlined, dark: false, label: '직접 입력', onTap: onManual)),
               ],
             ),
           ),
+          // + → X : 135° 회전 + 검정→흰색
           Positioned(
             right: 16, bottom: 12 + bottom,
             child: GestureDetector(
               onTap: () => Navigator.pop(context),
-              child: Container(
-                width: 56, height: 56,
-                decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: dockShadow),
-                child: const Icon(Icons.close_rounded, color: C.ink, size: 26),
+              child: AnimatedBuilder(
+                animation: spin,
+                builder: (_, __) {
+                  final v = spin.value.clamp(0.0, 1.2);
+                  final bg = Color.lerp(C.ink, Colors.white, v.clamp(0, 1))!;
+                  final fg = Color.lerp(Colors.white, C.ink, v.clamp(0, 1))!;
+                  return Container(
+                    width: 56, height: 56,
+                    decoration: BoxDecoration(color: bg, shape: BoxShape.circle, boxShadow: dockShadow),
+                    child: Transform.rotate(
+                      angle: v * (3 * math.pi / 4),
+                      child: Icon(Icons.add_rounded, color: fg, size: 30),
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -427,6 +455,30 @@ class _AddMenu extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 아래([fromBelow]px)에서 위로 떠오르며 0.6→1 로 커지고 페이드 인
+class _Rise extends StatelessWidget {
+  const _Rise({required this.t, required this.fromBelow, required this.child});
+  final Animation<double> t;
+  final double fromBelow;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: t,
+        builder: (_, c) {
+          final v = t.value;
+          return Transform.translate(
+            offset: Offset(0, fromBelow * (1 - v)),
+            child: Transform.scale(
+              scale: 0.6 + 0.4 * v,
+              alignment: Alignment.centerRight,
+              child: Opacity(opacity: v.clamp(0.0, 1.0), child: c),
+            ),
+          );
+        },
+        child: child,
+      );
 }
 
 class _EmptyState extends StatelessWidget {
