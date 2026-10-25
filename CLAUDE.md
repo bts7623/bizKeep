@@ -52,12 +52,13 @@ tools/
 - Xcode 설치 후: `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer && sudo xcodebuild -runFirstLaunch`, `brew install cocoapods`
 - **작업 데몬**: Finder에서 `tools/daemon.command` → "다음으로 열기 → 터미널" 로 한 번 띄워두면,
   `tools/queue/NN_name.sh` 에 넣은 스크립트를 순서대로 실행하고 `tools/logs/NN_name.log` 에 기록한다. 종료는 `tools/queue/STOP` 파일.
-- 테스트: `flutter test` (Xcode 불필요, 17개 통과), 정적 분석: `flutter analyze` (0 issues)
+- 테스트: `flutter test` (Xcode 불필요, 29개 통과), 정적 분석: `flutter analyze` (0 issues)
 - 코드 생성: `dart run build_runner build` (drift)
 - 시뮬레이터 UI 검증: `flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d <UDID>` → tools/logs/shots/*.png
 - Flutter 3.47 + Xcode 27: SPM 끔(`flutter config --no-enable-swift-package-manager`), Podfile `use_frameworks! :linkage => :static`, platform 15.5
 - **GitHub**: 원격 https://github.com/bts7623/bizKeep (private). 맥에는 gh·자격증명이 없으므로 맥에서 직접 push 하지 않는다.
   커밋은 맥(데몬)에서 만들고 `git bundle create tools/repo.bundle main` → Claude 세션 컨테이너로 가져가 push 한다.
+- 컨테이너 → 맥 파일 전송: tgz 를 보내고 `tools/unpack.sh tools/x.tgz` (마운트는 unlink 금지라 tar -O 로 덮어씀). 맥에서 git 쓰려면 세션마다 삭제 권한 요청 필요(.git lock).
 
 ## 진행 상태
 - [x] 1단계 코드: 목록·검색·상세(인라인 메모)·입력·설정·명함 보기, 헤더 숨김, 랭커·OCR 파서 + 테스트
@@ -66,7 +67,7 @@ tools/
 - [ ] 2단계-B (Android): ML Kit Kotlin 채널로 `bizkeep/vision` 동일 API 구현
 - [ ] 3단계: 통화 식별 (iOS Call Directory Extension)
 - [ ] 4단계: 백업/복원, 초성검색
-- [ ] **OCR 파서 보완** — `docs/ocr-plan.md` (실기기 7장 중 이름 1장만 정답). 픽스처 `test/fixtures/cards/` + `expected.json`, OCR 원문은 맥에서 `swift tools/ocr_fixtures.swift test/fixtures/cards`
+- [x] **OCR 파서 보완 1차** — `docs/ocr-plan.md` §0~§5 반영 (픽스처 5장 + 실기기 변형 7건 테스트 통과). §6 사용자 수정 학습, §7 온디바이스 LLM 은 보류. 새 오인식 명함은 사진을 `test/fixtures/cards/` 에 넣고 `swift tools/ocr_fixtures.swift test/fixtures/cards` → `expected.json` 에 기대값 추가
 
 ## 아이디어 백로그 (우선순위 순, 검토 의견은 대화 기록)
 1. 3단계 통화 식별 (Apple Developer 등록 후)
