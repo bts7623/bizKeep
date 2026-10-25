@@ -393,14 +393,16 @@ class _AddMenu extends StatelessWidget {
               ),
             ),
           ),
+          // 스피드 다이얼: + 바로 위, 같은 세로축. 라벨은 박스 없이 흰 글자 + 그림자 (디자인 시안 B-1)
           Positioned(
-            left: 16, right: 16, bottom: 88 + bottom,
+            right: 16, bottom: 88 + bottom,
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                GlassMenuCard(icon: Icons.photo_camera_outlined, dark: true, title: '명함 촬영', subtitle: '찍으면 바로 저장돼요', onTap: onCapture),
-                const SizedBox(height: 10),
-                GlassMenuCard(icon: Icons.edit_outlined, dark: false, title: '직접 입력', subtitle: '명함이 없을 때', onTap: onManual),
+                SpeedDialItem(icon: Icons.photo_camera_outlined, dark: true, label: '명함 촬영', onTap: onCapture),
+                const SizedBox(height: 14),
+                SpeedDialItem(icon: Icons.edit_outlined, dark: false, label: '직접 입력', onTap: onManual),
               ],
             ),
           ),

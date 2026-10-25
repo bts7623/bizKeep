@@ -340,3 +340,37 @@ class IndexBar extends StatelessWidget {
     );
   }
 }
+
+/// + 메뉴 항목: 흰 라벨(그림자) + 원형 버튼. 버튼은 독의 + 와 같은 56px 축.
+class SpeedDialItem extends StatelessWidget {
+  const SpeedDialItem({super.key, required this.icon, required this.dark, required this.label, required this.onTap});
+  final IconData icon;
+  final bool dark;
+  final String label;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true, label: label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(label, style: const TextStyle(
+            fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: -0.2,
+            shadows: [Shadow(color: Color(0x73000000), blurRadius: 2, offset: Offset(0, 1)), Shadow(color: Color(0x59000000), blurRadius: 16, offset: Offset(0, 4))],
+          )),
+          const SizedBox(width: 14),
+          Container(
+            width: 56, height: 56,
+            decoration: BoxDecoration(
+              color: dark ? C.ink : Colors.white, shape: BoxShape.circle,
+              boxShadow: [BoxShadow(color: C.ink.withValues(alpha: dark ? 0.3 : 0.22), blurRadius: 30, offset: const Offset(0, 10))],
+            ),
+            child: Icon(icon, color: dark ? Colors.white : C.ink, size: 26),
+          ),
+        ]),
+      ),
+    );
+  }
+}

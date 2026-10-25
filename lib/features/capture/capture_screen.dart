@@ -6,6 +6,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/image_paths.dart';
 import '../../core/providers.dart';
@@ -139,20 +140,50 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> with WidgetsBindi
     try {
       if (cam.value.isStreamingImages) await cam.stopImageStream();
       final shot = await cam.takePicture();
-      final id = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+      if (!mounted) return;
+      await _process(shot.path, quad: quad, fallbackRect: _guideRelativeRect(context, cam));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _flash = false; _capturing = false; });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('촬영에 실패했어요. 다시 맞춰 주세요.')));
+      if (Vision.supported && !cam.value.isStreamingImages) await cam.startImageStream(_onFrame);
+    }
+  }
 
-      // 1) 원본을 cards/ 로 옮기고 네이티브 원근 보정 크롭 (실패 시 가이드 영역 크롭)
+  // ---- 앨범에서 가져오기: 카메라 대신 사진 선택, 이후 파이프라인 동일 (사각 검출은 사진에서 자동) ----
+  Future<void> _pickFromAlbum() async {
+    if (_capturing) return;
+    final cam = _cam;
+    try {
+      if (cam != null && cam.value.isStreamingImages) await cam.stopImageStream();
+      final x = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (x == null || !mounted) {
+        if (cam != null && Vision.supported && mounted && !cam.value.isStreamingImages) await cam.startImageStream(_onFrame);
+        return;
+      }
+      setState(() { _capturing = true; _flash = true; });
+      await _process(x.path, quad: null, fallbackRect: const Rect.fromLTRB(0, 0, 1, 1), source: 'album');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _flash = false; _capturing = false; });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('사진을 불러오지 못했어요.')));
+      if (cam != null && Vision.supported && !cam.value.isStreamingImages) await cam.startImageStream(_onFrame);
+    }
+  }
+
+  /// 원본 → cards/ 복사 → 원근 보정 크롭(실패 시 fallbackRect 크롭) → 썸네일 → (내 명함이면 끝) OCR → 즉시 저장 → pop(id)
+  Future<void> _process(String srcPath, {required CardQuad? quad, required Rect fallbackRect, String source = 'camera'}) async {
+    try {
+      final id = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
       final dir = await ImageIo.cardsDir();
       final front = '${dir.path}/${id}_front.jpg';
-      await File(shot.path).copy(front);
+      await File(srcPath).copy(front);
       final cropped = await Vision.cropCard(front, quad);
       SavedImages saved;
       if (cropped != null) {
         saved = await ImageIo.makeThumb(front, '${dir.path}/${id}_thumb.jpg');
       } else {
-        if (!mounted) return;
-        final rect = _guideRelativeRect(context, cam);
-        saved = await ImageIo.processAndSave(await File(front).readAsBytes(), rect, id);
+        saved = await ImageIo.processAndSave(await File(front).readAsBytes(), fallbackRect, id);
       }
 
       if (widget.mine) {
@@ -174,7 +205,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> with WidgetsBindi
             name: parsed.name, company: parsed.company, department: parsed.department, title: parsed.title,
             phoneMobile: parsed.phoneMobile, phoneOffice: parsed.phoneOffice, fax: parsed.fax, email: parsed.email,
             address: parsed.address, website: parsed.website,
-            imageFront: ImagePaths.toStored(saved.front), thumb: ImagePaths.toStored(saved.thumb), ocrRaw: ocrText, source: 'camera',
+            imageFront: ImagePaths.toStored(saved.front), thumb: ImagePaths.toStored(saved.thumb), ocrRaw: ocrText, source: source,
             lowConfidence: parsed.lowConfidence.toList(),
           );
       HapticFeedback.heavyImpact();
@@ -182,8 +213,9 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> with WidgetsBindi
     } catch (e) {
       if (!mounted) return;
       setState(() { _flash = false; _capturing = false; });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('촬영에 실패했어요. 다시 맞춰 주세요.')));
-      if (Vision.supported && !cam.value.isStreamingImages) await cam.startImageStream(_onFrame);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('명함을 인식하지 못했어요. 다시 시도해 주세요.')));
+      final cam = _cam;
+      if (cam != null && Vision.supported && !cam.value.isStreamingImages) await cam.startImageStream(_onFrame);
     }
   }
 
@@ -241,8 +273,8 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> with WidgetsBindi
         ),
         Positioned(
           left: 0, right: 0, bottom: pad.bottom + 28,
-          child: Center(
-            child: Semantics(
+          child: Stack(alignment: Alignment.center, children: [
+            Semantics(
               button: true, label: '직접 촬영',
               child: GestureDetector(
                 onTap: (_capturing || cam == null) ? null : () => _capture(auto: false),
@@ -253,7 +285,22 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> with WidgetsBindi
                 ),
               ),
             ),
-          ),
+            // 앨범에서 가져오기 (셔터 왼쪽)
+            Positioned(
+              left: 36,
+              child: Semantics(
+                button: true, label: '앨범에서 가져오기',
+                child: GestureDetector(
+                  onTap: _capturing ? null : _pickFromAlbum,
+                  child: Container(
+                    width: 52, height: 52,
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.14), shape: BoxShape.circle, border: Border.all(color: Colors.white.withValues(alpha: 0.25))),
+                    child: const Icon(Icons.photo_library_outlined, color: Colors.white, size: 24),
+                  ),
+                ),
+              ),
+            ),
+          ]),
         ),
         if (_capturing)
           const Positioned(left: 0, right: 0, bottom: 120, child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)))),
