@@ -154,8 +154,9 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> with WidgetsBindi
       }
 
       // 2) OCR (네이티브, ~0.3s)
-      final ocrText = await Vision.recognizeText(saved.front);
-      final parsed = const OcrParser().parse(ocrText);
+      final ocrLines = await Vision.recognizeLines(saved.front);
+      final ocrText = OcrLine.mergeRows(ocrLines).map((l) => l.text).join('\n');
+      final parsed = const OcrParser().parseLines(ocrLines);
 
       // 3) 즉시 저장
       final c = await ref.read(repoProvider).create(

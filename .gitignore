@@ -53,3 +53,4 @@ tools/*.bundle
 tools/*.tgz
 tools/push.sh
 build/dd/
+test/fixtures/cards/

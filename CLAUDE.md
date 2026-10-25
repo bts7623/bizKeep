@@ -44,6 +44,7 @@ docs/
   design.md                # 색·타이포·간격 토큰
 tools/
   daemon.command           # Finder에서 한 번 실행해 두는 작업 데몬 (queue/*.sh → logs/*.log)
+  ocr_fixtures.swift       # 픽스처 명함 사진 → Vision OCR 원문(.txt/.boxes.tsv). 픽스처(실명함)는 git 제외
 ```
 
 ## 개발 환경 메모
@@ -65,6 +66,16 @@ tools/
 - [ ] 2단계-B (Android): ML Kit Kotlin 채널로 `bizkeep/vision` 동일 API 구현
 - [ ] 3단계: 통화 식별 (iOS Call Directory Extension)
 - [ ] 4단계: 백업/복원, 초성검색
+- [ ] **OCR 파서 보완** — `docs/ocr-plan.md` (실기기 7장 중 이름 1장만 정답). 픽스처 `test/fixtures/cards/` + `expected.json`, OCR 원문은 맥에서 `swift tools/ocr_fixtures.swift test/fixtures/cards`
+
+## 아이디어 백로그 (우선순위 순, 검토 의견은 대화 기록)
+1. 3단계 통화 식별 (Apple Developer 등록 후)
+2. 목록 그룹핑: 이름순 ㄱ~ㅎ 인덱스 바 / 회사순 트리(회사 행 접기·인원수, 1명 회사는 평면, ㈜·(주)·주식회사 정규화) / 등록월
+3. 즐겨찾기: 사람(상단 고정), 회사(트리에서 고정+펼침)
+4. 내 명함: vCard + 이미지 공유 (오른쪽 스와이프)
+5. iOS 내비게이션: 설정·명함보기는 push+스와이프 백, 상세 시트는 끌어내려 닫기, 촬영·입력은 모달 유지
+6. 성능은 측정 후 최적화 (수백 건 넘기 전엔 손대지 않음)
+7. BizDrop(P2P 전송)은 보류 — AirDrop/vCard로 대체
 
 ## 코드 규칙
 - 목록 행 위젯은 `const` + 고정 높이, `ListView.builder` 사용. 썸네일은 별도 생성된 작은 WebP만.

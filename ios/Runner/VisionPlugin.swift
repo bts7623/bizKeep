@@ -42,6 +42,12 @@ final class VisionPlugin {
         let text = self.recognizeText(path: path)
         DispatchQueue.main.async { result(text) }
       }
+    case "recognizeLines":
+      guard let path = args["path"] as? String else { result([]); return }
+      queue.async {
+        let lines = self.recognizeLines(path: path)
+        DispatchQueue.main.async { result(lines) }
+      }
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -126,15 +132,29 @@ final class VisionPlugin {
   }
 
   // MARK: - 텍스트 인식 (한국어·영어, 정확도 우선)
-  private func recognizeText(path: String) -> String {
-    guard let ui = UIImage(contentsOfFile: path), let cg = ui.cgImage else { return "" }
+  private func observations(path: String) -> [VNRecognizedTextObservation] {
+    guard let ui = UIImage(contentsOfFile: path), let cg = ui.cgImage else { return [] }
     let req = VNRecognizeTextRequest()
     req.recognitionLevel = .accurate
     req.usesLanguageCorrection = false
     req.recognitionLanguages = ["ko-KR", "en-US"]
     let handler = VNImageRequestHandler(cgImage: cg, orientation: CGImagePropertyOrientation(ui.imageOrientation), options: [:])
-    do { try handler.perform([req]) } catch { return "" }
-    guard let obs = req.results else { return "" }
+    do { try handler.perform([req]) } catch { return [] }
+    return req.results ?? []
+  }
+
+  /// 줄별 [text, x, y, w, h] — 좌상단 원점 정규화 좌표. 행 합치기·글자 크기 판단은 Dart(OcrParser)에서.
+  private func recognizeLines(path: String) -> [[Any]] {
+    return observations(path: path).compactMap { o in
+      guard let c = o.topCandidates(1).first else { return nil }
+      let b = o.boundingBox
+      return [c.string, Double(b.minX), Double(1 - b.maxY), Double(b.width), Double(b.height)]
+    }
+  }
+
+  private func recognizeText(path: String) -> String {
+    let obs = observations(path: path)
+    if obs.isEmpty { return "" }
     // 위→아래, 왼→오른쪽 순으로 줄 정렬 (Vision 좌표는 좌하단 원점)
     let sorted = obs.sorted { a, b in
       let ay = a.boundingBox.midY, by = b.boundingBox.midY

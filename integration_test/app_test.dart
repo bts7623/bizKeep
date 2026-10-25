@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 /// 시뮬레이터 화면 점검용: 샘플 데이터 넣고 주요 화면을 캡처한다.
-/// flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d <UDID>
+/// flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d `<UDID>`
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 

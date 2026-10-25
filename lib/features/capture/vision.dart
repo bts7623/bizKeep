@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 
+import '../../data/ocr_parser.dart';
+
 /// 검출된 명함 사각형 (정규화 0~1, Vision 좌표계: 좌하단 원점).
 class CardQuad {
   final List<double> pts; // x0,y0,x1,y1,x2,y2,x3,y3 (TL,TR,BR,BL)
@@ -44,6 +46,18 @@ abstract final class Vision {
   static Future<String> recognizeText(String path) async {
     if (!supported) return '';
     return (await _ch.invokeMethod<String>('recognizeText', {'path': path})) ?? '';
+  }
+
+  /// 줄별 텍스트 + 위치·크기 (좌상단 원점, 0~1). 파서가 같은 행 합치기·글자 크기 단서로 사용.
+  static Future<List<OcrLine>> recognizeLines(String path) async {
+    if (!supported) return const [];
+    final r = await _ch.invokeMethod<List<Object?>>('recognizeLines', {'path': path});
+    if (r == null) return const [];
+    return [
+      for (final e in r.whereType<List<Object?>>())
+        if (e.length >= 5)
+          OcrLine(e[0] as String, x: (e[1] as num).toDouble(), y: (e[2] as num).toDouble(), w: (e[3] as num).toDouble(), h: (e[4] as num).toDouble()),
+    ];
   }
 }
 
