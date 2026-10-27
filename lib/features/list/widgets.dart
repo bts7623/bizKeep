@@ -465,7 +465,7 @@ abstract final class Toast {
   static void show(BuildContext context, String text, {IconData icon = Icons.check_rounded}) {
     _entry?.remove();
     _entry = null;
-    final overlay = Overlay.maybeOf(context);
+    final overlay = Overlay.maybeOf(context, rootOverlay: true); // 시트가 닫혀도 남도록 루트 오버레이
     if (overlay == null) return;
     final bottom = MediaQuery.paddingOf(context).bottom;
     late OverlayEntry e;

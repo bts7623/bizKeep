@@ -221,6 +221,7 @@ class _MyCardsSheetState extends ConsumerState<MyCardsSheet> {
     final ok = await ConfirmSheet.show(context, title: '내 명함 삭제', message: '이 명함 이미지를 지워요.');
     if (!ok || !mounted) return;
     await ref.read(repoProvider).deleteWithImages(c);
+    if (mounted) Toast.show(context, '삭제되었습니다');
   }
 }
 

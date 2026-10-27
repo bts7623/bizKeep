@@ -232,7 +232,9 @@ class _DetailSheetState extends ConsumerState<DetailSheet> {
     final ok = await ConfirmSheet.show(context, title: '${c.name.isEmpty ? '이 연락처' : c.name} 삭제', message: '명함 이미지도 함께 삭제돼요.');
     if (!ok || !context.mounted) return;
     await ref.read(repoProvider).deleteWithImages(c);
-    if (context.mounted) Navigator.pop(context);
+    if (!context.mounted) return;
+    Toast.show(context, '삭제되었습니다');
+    Navigator.pop(context);
   }
 }
 
