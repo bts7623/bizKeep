@@ -90,6 +90,7 @@ final class VisionPlugin {
     guard let ui = UIImage(contentsOfFile: path), let cg = ui.cgImage else { return nil }
     var ci = CIImage(cgImage: cg).oriented(forExifOrientation: Int32(ui.imageOrientation.exifValue))
     let ext = ci.extent
+    var cropped = false
     if let q = quad, q.count >= 8 {
       // 촬영 사진에서 다시 검출 (프레임과 사진 좌표계 차이 방지)
       if let o = detectOnImage(ci) {
@@ -100,9 +101,13 @@ final class VisionPlugin {
           "inputTopLeft": CIVector(cgPoint: pts[0]), "inputTopRight": CIVector(cgPoint: pts[1]),
           "inputBottomRight": CIVector(cgPoint: pts[2]), "inputBottomLeft": CIVector(cgPoint: pts[3])])
       }
+      cropped = true
     } else if let o = detectOnImage(ci) {
       ci = perspective(ci, o, ext)
+      cropped = true
     }
+    // 사각형을 못 찾았으면 nil 을 돌려 Dart 가 가이드 프레임 영역으로라도 잘라내게 한다 (세로 원본이 그대로 저장되는 것 방지)
+    if !cropped { return nil }
     // 리사이즈
     let longest = max(ci.extent.width, ci.extent.height)
     if longest > 1280 {
@@ -118,7 +123,7 @@ final class VisionPlugin {
   private func detectOnImage(_ ci: CIImage) -> VNRectangleObservation? {
     let req = VNDetectRectanglesRequest()
     req.minimumAspectRatio = 0.45; req.maximumAspectRatio = 0.75
-    req.minimumSize = 0.3; req.minimumConfidence = 0.6; req.maximumObservations = 1
+    req.minimumSize = 0.15; req.minimumConfidence = 0.5; req.maximumObservations = 1
     let h = VNImageRequestHandler(ciImage: ci, options: [:])
     try? h.perform([req])
     return req.results?.first
