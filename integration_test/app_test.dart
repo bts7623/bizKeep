@@ -1,6 +1,7 @@
 import 'package:bizkeep/core/providers.dart';
 import 'package:bizkeep/features/detail/detail_sheet.dart';
 import 'package:bizkeep/features/list/list_screen.dart';
+import 'package:bizkeep/features/list/widgets.dart';
 import 'package:bizkeep/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -153,7 +154,7 @@ void main() {
     // 상세 삭제 → 하단 확인 시트
     await t.tap(find.textContaining('박서연').first);
     await t.pumpAndSettle();
-    await t.tap(find.byIcon(Icons.delete_outline_rounded).first);
+    await t.tap(find.byIcon(Icons.delete_outline_rounded).last);
     await shot(t, '22_delete_sheet');
     await t.tap(find.text('취소'));
     await t.pumpAndSettle();
@@ -168,12 +169,13 @@ void main() {
     await t.tap(find.bySemanticsLabel('선택 취소'));
     await t.pumpAndSettle();
 
-    // 왼쪽 스와이프 삭제 → 실행 취소
-    await t.drag(find.textContaining('박서연').first, const Offset(-500, 0));
-    await t.pumpAndSettle(const Duration(milliseconds: 500));
-    await shot(t, '25_swipe_deleted_undo');
-    await t.tap(find.text('실행 취소'));
-    await t.pumpAndSettle(const Duration(milliseconds: 500));
-    await shot(t, '26_after_undo');
+    // 왼쪽으로 살짝 밀어 삭제 버튼 → 탭 → 토스트
+    await t.drag(find.textContaining('박서연').first, const Offset(-120, 0));
+    await t.pumpAndSettle(const Duration(milliseconds: 400));
+    await shot(t, '25_swipe_reveal');
+    await t.tap(find.descendant(of: find.byWidgetPredicate((w) => w is SwipeReveal && w.open), matching: find.text('삭제')));
+    await t.pump(const Duration(milliseconds: 500));
+    await binding.takeScreenshot('26_deleted_toast');
+    await t.pumpAndSettle(const Duration(seconds: 3));
   });
 }

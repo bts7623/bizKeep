@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme.dart';
 import '../../data/contact_repo.dart';
@@ -335,21 +336,6 @@ class IndexBar extends StatelessWidget {
 }
 
 
-/// 스와이프 삭제 배경 (오른쪽 → 왼쪽)
-class SwipeDeleteBackground extends StatelessWidget {
-  const SwipeDeleteBackground({super.key});
-  @override
-  Widget build(BuildContext context) => Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 22),
-        decoration: BoxDecoration(color: C.danger, borderRadius: BorderRadius.circular(R.row)),
-        child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.delete_outline_rounded, color: Colors.white, size: 24),
-          SizedBox(height: 2),
-          Text('삭제', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-        ]),
-      );
-}
 
 /// 파괴적 동작 확인 — 가운데 다이얼로그 대신 하단 시트 (손가락·시선이 아래에 머문다)
 abstract final class ConfirmSheet {
@@ -381,5 +367,168 @@ abstract final class ConfirmSheet {
       ),
     );
     return r == true;
+  }
+}
+
+/// 행을 왼쪽으로 살짝 밀면 오른쪽에 삭제 버튼이 드러난다 (iOS 메일식). 끝까지 밀어도 자동 삭제는 안 함.
+class SwipeReveal extends StatefulWidget {
+  const SwipeReveal({super.key, required this.child, required this.open, required this.onOpenChanged, required this.onDelete, this.actionWidth = 84});
+  final Widget child;
+  /// 외부에서 관리하는 열림 상태 (한 번에 한 행만)
+  final bool open;
+  final ValueChanged<bool> onOpenChanged;
+  final VoidCallback onDelete;
+  final double actionWidth;
+  @override
+  State<SwipeReveal> createState() => _SwipeRevealState();
+}
+
+class _SwipeRevealState extends State<SwipeReveal> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 180), value: widget.open ? 1 : 0);
+  double _dragStart = 0;
+
+  @override
+  void didUpdateWidget(covariant SwipeReveal old) {
+    super.didUpdateWidget(old);
+    if (old.open != widget.open) widget.open ? _c.forward() : _c.reverse();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  void _onStart(DragStartDetails d) => _dragStart = _c.value;
+  void _onUpdate(DragUpdateDetails d) => _c.value = (_c.value - d.primaryDelta! / widget.actionWidth).clamp(0.0, 1.0);
+  void _onEnd(DragEndDetails d) {
+    final v = d.primaryVelocity ?? 0;
+    final open = v < -200 ? true : v > 200 ? false : _c.value > 0.5;
+    if (open != widget.open) {
+      widget.onOpenChanged(open);
+    } else {
+      open ? _c.forward() : _c.reverse();
+    }
+    if (open && _dragStart < 0.5) HapticFeedback.selectionClick();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onHorizontalDragStart: _onStart,
+      onHorizontalDragUpdate: _onUpdate,
+      onHorizontalDragEnd: _onEnd,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (_, child) {
+          final dx = -widget.actionWidth * _c.value;
+          return ClipRect(child: Stack(children: [
+            // 뒤에 깔리는 삭제 버튼 (행 높이에 맞춰 늘어남)
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: IgnorePointer(
+                  ignoring: _c.value < 0.5,
+                  child: Opacity(
+                  opacity: _c.value.clamp(0, 1),
+                  child: Semantics(
+                    button: true, label: '삭제',
+                    child: GestureDetector(
+                      onTap: widget.onDelete,
+                      child: Container(
+                        width: widget.actionWidth - 10,
+                        decoration: BoxDecoration(color: C.danger, borderRadius: BorderRadius.circular(R.row)),
+                        child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Icon(Icons.delete_outline_rounded, color: Colors.white, size: 22),
+                          SizedBox(height: 2),
+                          Text('삭제', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                        ]),
+                      ),
+                    ),
+                  ),
+                ),
+                ),
+              ),
+            ),
+            Transform.translate(offset: Offset(dx, 0), child: child),
+          ]));
+        },
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// 가벼운 토스트 — 하단 독 위에 떠서 1.6초 뒤 스르륵 사라진다.
+abstract final class Toast {
+  static OverlayEntry? _entry;
+  static void show(BuildContext context, String text, {IconData icon = Icons.check_rounded}) {
+    _entry?.remove();
+    _entry = null;
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) return;
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    late OverlayEntry e;
+    e = OverlayEntry(builder: (_) => _ToastView(text: text, icon: icon, bottom: 86 + bottom, onDone: () { if (_entry == e) _entry = null; e.remove(); }));
+    _entry = e;
+    overlay.insert(e);
+  }
+}
+
+class _ToastView extends StatefulWidget {
+  const _ToastView({required this.text, required this.icon, required this.bottom, required this.onDone});
+  final String text;
+  final IconData icon;
+  final double bottom;
+  final VoidCallback onDone;
+  @override
+  State<_ToastView> createState() => _ToastViewState();
+}
+
+class _ToastViewState extends State<_ToastView> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 220), reverseDuration: const Duration(milliseconds: 400));
+  @override
+  void initState() {
+    super.initState();
+    _c.forward();
+    Future.delayed(const Duration(milliseconds: 1600), () async {
+      if (!mounted) return;
+      await _c.reverse();
+      if (mounted) widget.onDone();
+    });
+  }
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+  @override
+  Widget build(BuildContext context) {
+    final a = CurvedAnimation(parent: _c, curve: Curves.easeOut, reverseCurve: Curves.easeIn);
+    return Positioned(
+      left: 0, right: 0, bottom: widget.bottom,
+      child: IgnorePointer(
+        child: Center(
+          child: FadeTransition(
+            opacity: a,
+            child: SlideTransition(
+              position: Tween(begin: const Offset(0, 0.3), end: Offset.zero).animate(a),
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  height: 40, padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(color: C.ink.withValues(alpha: 0.92), borderRadius: BorderRadius.circular(20), boxShadow: dockShadow),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(widget.icon, size: 16, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(widget.text, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

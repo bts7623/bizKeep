@@ -21,8 +21,10 @@ abstract final class C {
   static const memoListInk = Color(0xFF5B6475);
   static const warnBg = Color(0xFFFFF6DC);
   static const warnInk = Color(0xFF8A5A00);
-  static const danger = Color(0xFFC62828);
-  static const dangerTint = Color(0xFFFDECEC);
+  /// 파괴적 동작 — 채도 낮춘 코랄 레드 (ink·accent 와 같은 톤)
+  static const danger = Color(0xFFD9655C);
+  static const dangerTint = Color(0xFFFBEDEB);
+  static const dangerInk = Color(0xFFB5443B);
   static const navy = Color(0xFF0E1A33);
 }
 

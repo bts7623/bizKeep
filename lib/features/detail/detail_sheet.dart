@@ -183,7 +183,7 @@ class _DetailSheetState extends ConsumerState<DetailSheet> {
                   width: 52, height: 52,
                   child: FilledButton(
                     onPressed: () => _delete(context, contact),
-                    style: FilledButton.styleFrom(backgroundColor: C.dangerTint, foregroundColor: C.danger, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                    style: FilledButton.styleFrom(backgroundColor: C.dangerTint, foregroundColor: C.dangerInk, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                     child: const Icon(Icons.delete_outline_rounded, size: 22),
                   ),
                 ),

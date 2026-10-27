@@ -31,42 +31,11 @@ final sortModeProvider = StateProvider<SortMode>((_) => SortMode.recent);
 /// 회사순 트리에서 펼쳐진 회사 key (세션 동안만 유지).
 final expandedCompaniesProvider = StateProvider<Set<String>>((_) => const {});
 
+/// 스와이프로 삭제 버튼이 열린 행 (한 번에 하나만).
+final openSwipeProvider = StateProvider<String?>((_) => null);
+
 /// 선택 모드: null 이면 꺼짐, 아니면 선택된 id 집합 (빈 집합도 선택 모드).
 final selectionProvider = StateProvider<Set<String>?>((_) => null);
-
-/// 스와이프 삭제 대기열: 목록에서 즉시 숨기고 5초 뒤 실제 삭제. "실행 취소" 로 복구.
-class PendingDelete extends StateNotifier<Set<String>> {
-  PendingDelete(this.ref) : super(const {});
-  final Ref ref;
-  final _timers = <String, Timer>{};
-
-  void schedule(Contact c) {
-    state = {...state, c.id};
-    _timers[c.id]?.cancel();
-    _timers[c.id] = Timer(const Duration(seconds: 5), () => _commit(c));
-  }
-
-  void undo(String id) {
-    _timers.remove(id)?.cancel();
-    state = {...state}..remove(id);
-  }
-
-  Future<void> _commit(Contact c) async {
-    _timers.remove(c.id);
-    await ref.read(repoProvider).deleteWithImages(c);
-    state = {...state}..remove(c.id);
-  }
-
-  @override
-  void dispose() {
-    for (final t in _timers.values) {
-      t.cancel();
-    }
-    super.dispose();
-  }
-}
-
-final pendingDeleteProvider = StateNotifierProvider<PendingDelete, Set<String>>((ref) => PendingDelete(ref));
 
 /// 검색어 (150ms 디바운스 후 반영).
 final searchQueryProvider = StateProvider<String>((_) => '');
@@ -94,8 +63,7 @@ final searchDebouncerProvider = Provider<SearchDebouncer>((ref) {
 
 /// 화면에 그릴 최종 목록: 검색어가 있으면 랭커 결과(평면), 없으면 정렬 모드별 섹션 목록.
 final visibleEntriesProvider = Provider<List<ListEntry>>((ref) {
-  final hidden = ref.watch(pendingDeleteProvider);
-  final all = (ref.watch(contactsProvider).value ?? const <Contact>[]).where((c) => !hidden.contains(c.id)).toList();
+  final all = ref.watch(contactsProvider).value ?? const <Contact>[];
   final q = ref.watch(searchQueryProvider);
   if (q.trim().isNotEmpty) {
     final hits = const SearchRanker().rank(q, all.map((c) => c.toSearchDoc()));

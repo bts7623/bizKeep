@@ -118,6 +118,15 @@ class _MyCardsSheetState extends ConsumerState<MyCardsSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(children: [
               if (current != null) ...[
+                SizedBox(
+                  width: 52, height: 52,
+                  child: FilledButton(
+                    onPressed: () => _save(current),
+                    style: FilledButton.styleFrom(backgroundColor: const Color(0xFFF0F2F5), foregroundColor: C.ink, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                    child: const Icon(Icons.download_rounded, size: 22),
+                  ),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: () => _share(current),
@@ -142,7 +151,7 @@ class _MyCardsSheetState extends ConsumerState<MyCardsSheet> {
                   width: 52, height: 52,
                   child: FilledButton(
                     onPressed: () => _delete(current),
-                    style: FilledButton.styleFrom(backgroundColor: C.dangerTint, foregroundColor: C.danger, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                    style: FilledButton.styleFrom(backgroundColor: C.dangerTint, foregroundColor: C.dangerInk, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                     child: const Icon(Icons.delete_outline_rounded, size: 22),
                   ),
                 ),
@@ -158,6 +167,11 @@ class _MyCardsSheetState extends ConsumerState<MyCardsSheet> {
 
   void _view(Contact c) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => CardViewScreen(contactId: c.id), fullscreenDialog: true));
+  }
+
+  Future<void> _save(Contact c) async {
+    final ok = c.imageFront == null ? false : await Act.saveToPhotos(ImagePaths.resolve(c.imageFront!));
+    if (mounted) Toast.show(context, ok ? '사진에 저장했어요' : '저장할 수 없어요 (사진 권한 확인)', icon: ok ? Icons.check_rounded : Icons.error_outline_rounded);
   }
 
   Future<void> _share(Contact c) {

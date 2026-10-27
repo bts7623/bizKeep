@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:gal/gal.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -12,6 +13,16 @@ abstract final class Act {
   static Future<void> web(String url) =>
       _launch(Uri.parse(url.startsWith('http') ? url : 'https://$url'));
   static Future<void> copy(String text) => Clipboard.setData(ClipboardData(text: text));
+
+  /// 사진 보관함에 저장. 실패(권한 거부 등) 시 false.
+  static Future<bool> saveToPhotos(String path) async {
+    try {
+      await Gal.putImage(path, album: 'BizKeep');
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   /// iOS 공유 시트 — 이미지 저장·복사·에어드롭·메신저 전송을 한 번에.
   static Future<void> shareImages(List<String> paths, {Rect? origin}) =>

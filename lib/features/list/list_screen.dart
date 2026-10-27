@@ -62,7 +62,7 @@ class _ListScreenState extends ConsumerState<ListScreen> {
   @override
   Widget build(BuildContext context) {
     final items = ref.watch(visibleEntriesProvider);
-    final total = (ref.watch(contactsProvider).value?.length ?? 0) - ref.watch(pendingDeleteProvider).length;
+    final total = ref.watch(contactsProvider).value?.length ?? 0;
     final searching = ref.watch(searchQueryProvider).trim().isNotEmpty;
     final sort = ref.watch(sortModeProvider);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
@@ -81,7 +81,7 @@ class _ListScreenState extends ConsumerState<ListScreen> {
           children: [
             GestureDetector(
               behavior: HitTestBehavior.translucent,
-              onTap: () => _searchFocus.unfocus(),
+              onTap: () { _searchFocus.unfocus(); ref.read(openSwipeProvider.notifier).state = null; },
               child: CustomScrollView(
                 controller: _scroll,
                 keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -193,7 +193,7 @@ class _ListScreenState extends ConsumerState<ListScreen> {
           indent: indent,
           selecting: selecting,
           selected: selection?.contains(contact.id) ?? false,
-          onTap: selecting ? () => _toggle(contact.id) : () => _openDetail(contact),
+          onTap: selecting ? () => _toggle(contact.id) : () { if (ref.read(openSwipeProvider) != null) { ref.read(openSwipeProvider.notifier).state = null; } else { _openDetail(contact); } },
           onThumbTap: () => _openCard(contact),
           onLongPress: () {
             HapticFeedback.mediumImpact();
@@ -203,12 +203,13 @@ class _ListScreenState extends ConsumerState<ListScreen> {
           onCallLong: contact.phoneOffice.isNotEmpty ? () => Act.call(contact.phoneOffice) : null,
         );
         if (selecting) return row;
-        // 왼쪽으로 밀면 삭제 (5초 안에 실행 취소 가능)
-        return Dismissible(
+        // 왼쪽으로 살짝 밀면 삭제 버튼 (한 번에 한 행만 열림)
+        final open = ref.watch(openSwipeProvider) == contact.id;
+        return SwipeReveal(
           key: ValueKey(contact.id),
-          direction: DismissDirection.endToStart,
-          background: const SwipeDeleteBackground(),
-          onDismissed: (_) => _swipeDelete(contact),
+          open: open,
+          onOpenChanged: (v) => ref.read(openSwipeProvider.notifier).state = v ? contact.id : null,
+          onDelete: () => _swipeDelete(contact),
           child: row,
         );
       case SectionEntry(:final label):
@@ -233,17 +234,10 @@ class _ListScreenState extends ConsumerState<ListScreen> {
     n.state = cur;
   }
 
-  void _swipeDelete(Contact c) {
-    ref.read(pendingDeleteProvider.notifier).schedule(c);
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(
-        content: Text('${c.name.isEmpty ? '연락처' : c.name} 삭제됨'),
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.fromLTRB(16, 0, 16, 84 + MediaQuery.paddingOf(context).bottom),
-        duration: const Duration(seconds: 5),
-        action: SnackBarAction(label: '실행 취소', onPressed: () => ref.read(pendingDeleteProvider.notifier).undo(c.id)),
-      ));
+  Future<void> _swipeDelete(Contact c) async {
+    ref.read(openSwipeProvider.notifier).state = null;
+    await ref.read(repoProvider).deleteWithImages(c);
+    if (mounted) Toast.show(context, '삭제되었습니다');
   }
 
   Future<void> _deleteSelected(Set<String> ids) async {
@@ -252,10 +246,13 @@ class _ListScreenState extends ConsumerState<ListScreen> {
     if (!ok || !mounted) return;
     final all = ref.read(contactsProvider).value ?? const <Contact>[];
     final repo = ref.read(repoProvider);
+    var n = 0;
     for (final c in all.where((c) => ids.contains(c.id))) {
       await repo.deleteWithImages(c);
+      n++;
     }
     ref.read(selectionProvider.notifier).state = null;
+    if (mounted) Toast.show(context, '$n건 삭제되었습니다');
   }
 
   Future<void> _openManualDirect() async {
