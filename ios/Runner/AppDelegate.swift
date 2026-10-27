@@ -14,6 +14,7 @@ import UIKit
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "VisionPlugin") {
       VisionPlugin.register(with: registrar.messenger())
+      CallDirPlugin.register(with: registrar.messenger())
     }
   }
 }

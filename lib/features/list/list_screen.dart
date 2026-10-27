@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/actions.dart';
+import '../../core/calldir.dart';
 import '../../core/image_paths.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
@@ -25,7 +26,7 @@ class ListScreen extends ConsumerStatefulWidget {
   ConsumerState<ListScreen> createState() => _ListScreenState();
 }
 
-class _ListScreenState extends ConsumerState<ListScreen> {
+class _ListScreenState extends ConsumerState<ListScreen> with WidgetsBindingObserver {
   final _searchCtrl = TextEditingController();
   final _searchFocus = FocusNode();
   final _scroll = ScrollController();
@@ -34,11 +35,61 @@ class _ListScreenState extends ConsumerState<ListScreen> {
   static const _listTop = 4.0;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 설정 앱에서 통화 식별을 켜고 돌아오면 상태 다시 조회
+    if (state == AppLifecycleState.resumed) ref.invalidate(callDirStatusProvider);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchCtrl.dispose();
     _searchFocus.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// 첫 명함을 저장한 직후 한 번만: 수신 전화 식별 켜기 안내 (디자인 보드 7)
+  Future<void> _maybePromptCallDir() async {
+    if (!CallDir.supported || !mounted) return;
+    final total = ref.read(contactsProvider).value?.length ?? 0;
+    if (total != 1 || await CallDir.wasPrompted()) return;
+    final status = await CallDir.status();
+    if (status == 'enabled' || !mounted) return;
+    await CallDir.markPrompted();
+    if (!mounted) return;
+    final go = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: C.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(R.sheet))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(20, 14, 20, 16 + MediaQuery.paddingOf(ctx).bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: const Color(0xFFD5D8DE), borderRadius: BorderRadius.circular(3)))),
+          const SizedBox(height: 16),
+          Container(width: 48, height: 48, decoration: BoxDecoration(color: C.callTint, borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.phone_in_talk_rounded, color: C.callInk)),
+          const SizedBox(height: 14),
+          Text('수신 전화에 이름을 띄울까요?', style: Theme.of(ctx).textTheme.headlineMedium),
+          const SizedBox(height: 6),
+          const Text('주소록에 넣지 않아도 저장한 명함의 번호로 전화가 오면 이름·회사가 보여요.\n설정 > 전화 > 통화 차단 및 발신자 확인에서 BizKeep을 켜 주세요.', style: TextStyle(fontSize: 14, color: C.inkMuted, height: 1.45)),
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: C.ink, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+            child: const Text('설정 열기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(height: 8),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), style: TextButton.styleFrom(minimumSize: const Size.fromHeight(44)), child: const Text('나중에', style: TextStyle(color: C.inkMuted, fontSize: 15))),
+        ]),
+      ),
+    );
+    if (go == true) await CallDir.openSettings();
   }
 
   static double _entryHeight(ListEntry e) => switch (e) {
@@ -61,6 +112,7 @@ class _ListScreenState extends ConsumerState<ListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(callDirSyncProvider);
     final items = ref.watch(visibleEntriesProvider);
     final total = ref.watch(contactsProvider).value?.length ?? 0;
     final searching = ref.watch(searchQueryProvider).trim().isNotEmpty;
@@ -257,7 +309,10 @@ class _ListScreenState extends ConsumerState<ListScreen> {
 
   Future<void> _openManualDirect() async {
     final id = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const EditScreen(), fullscreenDialog: true));
-    if (id != null && mounted) DetailSheet.show(context, id, justSaved: true);
+    if (id != null && mounted) {
+      await DetailSheet.show(context, id, justSaved: true);
+      await _maybePromptCallDir();
+    }
   }
 
   void _openDetail(Contact c) => DetailSheet.show(context, c.id);
@@ -284,6 +339,7 @@ class _ListScreenState extends ConsumerState<ListScreen> {
       }
       if (id == null || !mounted) return;
       final r = await DetailSheet.show(context, id, justSaved: true);
+      await _maybePromptCallDir();
       if (r != 'next') return;
     }
   }

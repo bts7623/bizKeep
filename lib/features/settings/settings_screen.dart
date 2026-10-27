@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/calldir.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 
@@ -10,6 +11,8 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final total = ref.watch(contactsProvider).value?.length ?? 0;
+    final status = ref.watch(callDirStatusProvider).value ?? 'unknown';
+    final enabled = status == 'enabled';
     return Scaffold(
       appBar: AppBar(
         backgroundColor: C.bg, surfaceTintColor: Colors.transparent, elevation: 0, centerTitle: true,
@@ -20,7 +23,16 @@ class SettingsScreen extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
         children: [
           _Group(title: '알림', children: [
-            _Toggle(title: '수신 전화 식별', sub: '3단계에서 켜져요 · 현재 $total명', value: false, enabled: false),
+            _Toggle(
+              title: '수신 전화 식별',
+              sub: enabled ? '켜짐 · $total명의 번호에 이름 표시' : (status == 'unsupported' ? '이 기기에선 지원되지 않아요' : '설정 > 전화 > 통화 차단 및 발신자 확인에서 켜 주세요'),
+              value: enabled,
+              enabled: status != 'unsupported',
+              onChanged: (_) async {
+                await CallDir.openSettings();
+                ref.invalidate(callDirStatusProvider);
+              },
+            ),
             const _Toggle(title: '문자 발신자 식별', sub: 'iOS에서는 지원되지 않아요', value: false, enabled: false, last: true),
           ]),
           const SizedBox(height: 22),
@@ -75,12 +87,13 @@ class _Group extends StatelessWidget {
 }
 
 class _Toggle extends StatelessWidget {
-  const _Toggle({required this.title, required this.sub, required this.value, this.enabled = true, this.last = false});
+  const _Toggle({required this.title, required this.sub, required this.value, this.enabled = true, this.last = false, this.onChanged});
   final String title;
   final String sub;
   final bool value;
   final bool enabled;
   final bool last;
+  final ValueChanged<bool>? onChanged;
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
@@ -93,7 +106,7 @@ class _Toggle extends StatelessWidget {
               Text(sub, style: const TextStyle(fontSize: 13, color: C.inkMuted)),
             ]),
           ),
-          Switch.adaptive(value: value, onChanged: enabled ? (_) {} : null, activeTrackColor: C.call),
+          Switch.adaptive(value: value, onChanged: enabled ? (onChanged ?? (_) {}) : null, activeTrackColor: C.call),
         ]),
       );
 }
