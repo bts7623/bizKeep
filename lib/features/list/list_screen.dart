@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -63,12 +62,14 @@ class _ListScreenState extends ConsumerState<ListScreen> {
   @override
   Widget build(BuildContext context) {
     final items = ref.watch(visibleEntriesProvider);
-    final total = ref.watch(contactsProvider).value?.length ?? 0;
+    final total = (ref.watch(contactsProvider).value?.length ?? 0) - ref.watch(pendingDeleteProvider).length;
     final searching = ref.watch(searchQueryProvider).trim().isNotEmpty;
     final sort = ref.watch(sortModeProvider);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top;
-    final showIndex = !searching && sort == SortMode.name && total > 0;
+    final selection = ref.watch(selectionProvider);
+    final selecting = selection != null;
+    final showIndex = !searching && !selecting && sort == SortMode.name && total > 0;
     final indexKeys = showIndex ? [for (final e in items) if (e is SectionEntry && e.indexKey != null) e.indexKey!] : const <String>[];
 
     return Scaffold(
@@ -106,12 +107,19 @@ class _ListScreenState extends ConsumerState<ListScreen> {
                         alignment: Alignment.bottomCenter,
                         minHeight: 0,
                         maxHeight: double.infinity,
-                        child: _Header(total: total, searching: searching),
+                        child: selecting
+                            ? _SelectHeader(
+                                count: selection.length,
+                                total: total,
+                                onAll: () => ref.read(selectionProvider.notifier).state = {for (final e in items) if (e is ContactEntry) e.contact.id},
+                                onCancel: () => ref.read(selectionProvider.notifier).state = null,
+                              )
+                            : _Header(total: total, searching: searching),
                       ),
                     ),
                   ),
                   if (total == 0)
-                    SliverFillRemaining(hasScrollBody: false, child: _EmptyState(onCapture: _openCapture))
+                    SliverFillRemaining(hasScrollBody: false, child: _EmptyState(onCapture: _openCapture, onManual: _openManualDirect))
                   else if (items.isEmpty)
                     const SliverFillRemaining(hasScrollBody: false, child: _NoResult())
                   else
@@ -146,7 +154,13 @@ class _ListScreenState extends ConsumerState<ListScreen> {
                 ),
               ),
             ),
-            // 글래스 독: 검색 + 등록
+            // 글래스 독: 검색 + 등록 / 선택 모드에선 삭제 버튼
+            if (selecting)
+              Positioned(
+                left: 16, right: 16, bottom: 12 + bottomInset,
+                child: _DeleteBar(count: selection.length, onDelete: () => _deleteSelected(selection)),
+              )
+            else
             Positioned(
               left: 16, right: 16, bottom: 12 + bottomInset,
               child: _Dock(
@@ -158,7 +172,7 @@ class _ListScreenState extends ConsumerState<ListScreen> {
                   _searchCtrl.clear();
                   ref.read(searchDebouncerProvider).clear();
                 },
-                onAdd: _openAddMenu,
+                onAdd: _openCapture,
               ),
             ),
           ],
@@ -168,17 +182,34 @@ class _ListScreenState extends ConsumerState<ListScreen> {
   }
 
   Widget _buildEntry(ListEntry e) {
+    final selection = ref.watch(selectionProvider);
     switch (e) {
       case ContactEntry(:final contact, :final hint, :final indent):
-        return ContactRow(
-          key: ValueKey(contact.id),
+        final selecting = selection != null;
+        final row = ContactRow(
+          key: ValueKey('row:${contact.id}'),
           contact: contact,
           hint: hint,
           indent: indent,
-          onTap: () => _openDetail(contact),
+          selecting: selecting,
+          selected: selection?.contains(contact.id) ?? false,
+          onTap: selecting ? () => _toggle(contact.id) : () => _openDetail(contact),
           onThumbTap: () => _openCard(contact),
+          onLongPress: () {
+            HapticFeedback.mediumImpact();
+            ref.read(selectionProvider.notifier).state = {contact.id};
+          },
           onCall: () => Act.call(contact.primaryPhone),
           onCallLong: contact.phoneOffice.isNotEmpty ? () => Act.call(contact.phoneOffice) : null,
+        );
+        if (selecting) return row;
+        // 왼쪽으로 밀면 삭제 (5초 안에 실행 취소 가능)
+        return Dismissible(
+          key: ValueKey(contact.id),
+          direction: DismissDirection.endToStart,
+          background: const SwipeDeleteBackground(),
+          onDismissed: (_) => _swipeDelete(contact),
+          child: row,
         );
       case SectionEntry(:final label):
         return SectionHeader(key: ValueKey('s:$label'), label: label);
@@ -195,6 +226,43 @@ class _ListScreenState extends ConsumerState<ListScreen> {
     }
   }
 
+  void _toggle(String id) {
+    final n = ref.read(selectionProvider.notifier);
+    final cur = {...?n.state};
+    cur.contains(id) ? cur.remove(id) : cur.add(id);
+    n.state = cur;
+  }
+
+  void _swipeDelete(Contact c) {
+    ref.read(pendingDeleteProvider.notifier).schedule(c);
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text('${c.name.isEmpty ? '연락처' : c.name} 삭제됨'),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.fromLTRB(16, 0, 16, 84 + MediaQuery.paddingOf(context).bottom),
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(label: '실행 취소', onPressed: () => ref.read(pendingDeleteProvider.notifier).undo(c.id)),
+      ));
+  }
+
+  Future<void> _deleteSelected(Set<String> ids) async {
+    if (ids.isEmpty) return;
+    final ok = await ConfirmSheet.show(context, title: '${ids.length}명 삭제', message: '명함 이미지도 함께 삭제돼요.');
+    if (!ok || !mounted) return;
+    final all = ref.read(contactsProvider).value ?? const <Contact>[];
+    final repo = ref.read(repoProvider);
+    for (final c in all.where((c) => ids.contains(c.id))) {
+      await repo.deleteWithImages(c);
+    }
+    ref.read(selectionProvider.notifier).state = null;
+  }
+
+  Future<void> _openManualDirect() async {
+    final id = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const EditScreen(), fullscreenDialog: true));
+    if (id != null && mounted) DetailSheet.show(context, id, justSaved: true);
+  }
+
   void _openDetail(Contact c) => DetailSheet.show(context, c.id);
   void _openCard(Contact c) {
     if (c.imageFront == null) {
@@ -206,41 +274,23 @@ class _ListScreenState extends ConsumerState<ListScreen> {
         .then((r) { if (r == 'detail' && mounted) _openDetail(c); });
   }
 
-  /// 촬영 → 상세(저장됨). 상세에서 "다음 명함" 을 누르면 다시 촬영으로 — 여러 장 연속 등록.
+  /// + = 바로 촬영. 촬영 → 상세(저장됨) → "다음 명함" 이면 다시 촬영 (연속 등록).
+  /// 촬영 화면의 "직접 입력" 은 CaptureScreen.manualResult 로 돌아와 입력 폼을 연다.
   Future<void> _openCapture() async {
     _searchFocus.unfocus();
     while (true) {
       if (!mounted) return;
-      final id = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const CaptureScreen(), fullscreenDialog: true));
+      var id = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const CaptureScreen(), fullscreenDialog: true));
+      if (id == CaptureScreen.manualResult) {
+        if (!mounted) return;
+        id = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const EditScreen(), fullscreenDialog: true));
+      }
       if (id == null || !mounted) return;
       final r = await DetailSheet.show(context, id, justSaved: true);
       if (r != 'next') return;
     }
   }
 
-  Future<void> _openManual() async {
-    _searchFocus.unfocus();
-    final id = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const EditScreen(), fullscreenDialog: true));
-    if (id != null && mounted) DetailSheet.show(context, id, justSaved: true);
-  }
-
-  void _openAddMenu() {
-    _searchFocus.unfocus();
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: '닫기',
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 260),
-      pageBuilder: (ctx, a1, a2) => _AddMenu(
-        animation: a1,
-        onCapture: () { Navigator.pop(ctx); _openCapture(); },
-        onManual: () { Navigator.pop(ctx); _openManual(); },
-      ),
-      // 전환은 _AddMenu 안에서 요소별로 처리 (스크림 페이드, + 회전, 항목 위로 떠오름)
-      transitionBuilder: (ctx, a, _, child) => child,
-    );
-  }
 }
 
 class _Header extends ConsumerWidget {
@@ -381,109 +431,10 @@ class _Dock extends StatelessWidget {
   }
 }
 
-/// + 메뉴. 열릴 때: 스크림 페이드 → + 가 135° 돌며 X 로(색 반전) → 항목들이 + 위치에서 위로 떠오름(아래 것부터).
-/// 닫힐 때는 같은 애니메이션을 거꾸로.
-class _AddMenu extends StatelessWidget {
-  const _AddMenu({required this.animation, required this.onCapture, required this.onManual});
-  final Animation<double> animation;
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.onCapture, required this.onManual});
   final VoidCallback onCapture;
   final VoidCallback onManual;
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.paddingOf(context).bottom;
-    final scrim = CurvedAnimation(parent: animation, curve: Curves.easeOut);
-    final spin = CurvedAnimation(parent: animation, curve: Curves.easeOutBack, reverseCurve: Curves.easeIn);
-    // 아래 항목(직접 입력)이 먼저, 위 항목(명함 촬영)이 살짝 늦게
-    Animation<double> rise(double start) => CurvedAnimation(parent: animation, curve: Interval(start, 1, curve: Curves.easeOutBack), reverseCurve: Interval(0, 1 - start, curve: Curves.easeIn));
-    final riseManual = rise(0.05);
-    final riseCapture = rise(0.2);
-
-    return Material(
-      color: Colors.transparent,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: FadeTransition(
-                opacity: scrim,
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                  child: Container(color: C.ink.withValues(alpha: 0.35)),
-                ),
-              ),
-            ),
-          ),
-          // 항목: + 버튼 자리에서 출발해 제자리로 올라오며 커지고 나타남
-          Positioned(
-            right: 16, bottom: 88 + bottom,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                _Rise(t: riseCapture, fromBelow: 56.0 + 14 + 56 + 76, child: SpeedDialItem(icon: Icons.photo_camera_outlined, dark: true, label: '명함 촬영', onTap: onCapture)),
-                const SizedBox(height: 14),
-                _Rise(t: riseManual, fromBelow: 76, child: SpeedDialItem(icon: Icons.edit_outlined, dark: false, label: '직접 입력', onTap: onManual)),
-              ],
-            ),
-          ),
-          // + → X : 135° 회전 + 검정→흰색
-          Positioned(
-            right: 16, bottom: 12 + bottom,
-            child: GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: AnimatedBuilder(
-                animation: spin,
-                builder: (_, __) {
-                  final v = spin.value.clamp(0.0, 1.2);
-                  final bg = Color.lerp(C.ink, Colors.white, v.clamp(0, 1))!;
-                  final fg = Color.lerp(Colors.white, C.ink, v.clamp(0, 1))!;
-                  return Container(
-                    width: 56, height: 56,
-                    decoration: BoxDecoration(color: bg, shape: BoxShape.circle, boxShadow: dockShadow),
-                    child: Transform.rotate(
-                      angle: v * (3 * math.pi / 4),
-                      child: Icon(Icons.add_rounded, color: fg, size: 30),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 아래([fromBelow]px)에서 위로 떠오르며 0.6→1 로 커지고 페이드 인
-class _Rise extends StatelessWidget {
-  const _Rise({required this.t, required this.fromBelow, required this.child});
-  final Animation<double> t;
-  final double fromBelow;
-  final Widget child;
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-        animation: t,
-        builder: (_, c) {
-          final v = t.value;
-          return Transform.translate(
-            offset: Offset(0, fromBelow * (1 - v)),
-            child: Transform.scale(
-              scale: 0.6 + 0.4 * v,
-              alignment: Alignment.centerRight,
-              child: Opacity(opacity: v.clamp(0.0, 1.0), child: c),
-            ),
-          );
-        },
-        child: child,
-      );
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onCapture});
-  final VoidCallback onCapture;
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -498,6 +449,8 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const Text('찍으면 바로 저장돼요', style: TextStyle(color: C.inkMuted, fontSize: 13)),
+          const SizedBox(height: 6),
+          TextButton(onPressed: onManual, child: const Text('명함 없이 직접 입력', style: TextStyle(color: C.accent, fontSize: 14, fontWeight: FontWeight.w600))),
         ],
       ),
     );
@@ -528,6 +481,76 @@ class CardThumb extends StatelessWidget {
         child: path != null
             ? Image.file(File(path), fit: BoxFit.cover, cacheWidth: (width * 3).toInt())
             : Center(child: Text(contact.initial, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: C.accent))),
+      ),
+    );
+  }
+}
+
+/// 선택 모드 헤더 (높이는 _Header 와 동일하게 유지)
+class _SelectHeader extends StatelessWidget {
+  const _SelectHeader({required this.count, required this.total, required this.onAll, required this.onCancel});
+  final int count;
+  final int total;
+  final VoidCallback onAll;
+  final VoidCallback onCancel;
+  @override
+  Widget build(BuildContext context) {
+    final top = MediaQuery.paddingOf(context).top;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, top + 8, 20, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('선택', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.inkMuted)),
+                const SizedBox(height: 2),
+                Text.rich(TextSpan(children: [
+                  TextSpan(text: '$count', style: Theme.of(context).textTheme.headlineLarge),
+                  TextSpan(text: ' / $total', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: C.inkMuted)),
+                ])),
+              ]),
+            ),
+            GlassCircleButton(icon: Icons.close_rounded, label: '선택 취소', onTap: onCancel),
+          ]),
+          const SizedBox(height: 12),
+          Row(children: [
+            SortChip(label: count == total ? '전체 선택됨' : '전체 선택', selected: count == total, onTap: onAll),
+            const SizedBox(width: 8),
+            SortChip(label: '취소', selected: false, onTap: onCancel),
+          ]),
+        ],
+      ),
+    );
+  }
+}
+
+/// 선택 모드 하단: 독 자리에 삭제 버튼
+class _DeleteBar extends StatelessWidget {
+  const _DeleteBar({required this.count, required this.onDelete});
+  final int count;
+  final VoidCallback onDelete;
+  @override
+  Widget build(BuildContext context) {
+    final enabled = count > 0;
+    return GestureDetector(
+      onTap: enabled ? onDelete : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        height: 56,
+        decoration: BoxDecoration(
+          color: enabled ? C.danger : Colors.white.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: enabled ? C.danger : Colors.white.withValues(alpha: 0.95)),
+          boxShadow: dockShadow,
+        ),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(Icons.delete_outline_rounded, color: enabled ? Colors.white : C.inkFaint, size: 22),
+          const SizedBox(width: 8),
+          Text(enabled ? '삭제 ($count)' : '삭제할 명함을 선택하세요', style: TextStyle(color: enabled ? Colors.white : C.inkMuted, fontSize: 16, fontWeight: FontWeight.w700)),
+        ]),
       ),
     );
   }

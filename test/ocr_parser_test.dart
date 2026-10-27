@@ -231,6 +231,59 @@ M 010-7142-4620  E msoh@douzone.com
     expect(d.company, '더존비즈온');
   });
 
+  test('회사명 줄에 상장 배지·URL 이 붙은 경우 (더존비즈온 KOSPI www…)', () {
+    final c = p.parse('''
+Maximizing Potential DOUZONE
+정 연 석
+TS본부 / TS영업3센터
+영업2Unit / 차장
+더존비즈온 (OsP) www.douzone.com
+서울특별시 중구 을지로1가 87 더존을지타워 14F
+T 02-6233-4030  M 010-4745-9636
+F 02-6670-0907  E ysju@douzone.com
+''');
+    expect(c.name, '정연석');
+    expect(c.title, '차장');
+    expect(c.company, '더존비즈온');
+    expect(c.website, 'www.douzone.com');
+    expect(c.department, 'TS본부 / TS영업3센터 / 영업2Unit');
+  });
+
+  test('이름 줄에 로마자(붙어쓴)·로고 기호가 같이 합쳐진 경우', () {
+    final c = p.parse('''
+이 영 우 LeeYeongwoo @METABUILD
+사업3본부 | 상무이사
+Sales Office 3 | Managing Director
+주 소 서울특별시 서초구 서초중앙로 62 메타빌드빌딩 (06640)
+M 010.5581.6189  T 02.598.3327
+E lyw@metabuild.co.kr  F 02.598.3329
+www.metabuild.co.kr
+''');
+    expect(c.name, '이영우');
+    expect(c.company, 'METABUILD');
+    expect(c.title, '상무이사');
+  });
+
+  test('조직명이 붙은 긴 직책 + 약어 로고 + 기관명을 주소로 오인하지 않기 (노동조합)', () {
+    final c = p.parse('''
+한국노총/공공연맹
+SMLU 서울교통공사통합노동조합
+조직강화실장 조 성 익
+04803 서울시 성동구 천호대로 232 서울교통공사 신답별관 8F
+Tel 02-6110-8337  Fax 02-6110-8339
+M.P 010-2639-5980  E-mail gheh719@naver.com
+''');
+    expect(c.name, '조성익');
+    expect(c.title, '조직강화실장');
+    expect(c.company, '서울교통공사통합노동조합');
+    expect(c.department, '한국노총/공공연맹');
+    expect(c.address, startsWith('04803 서울시 성동구 천호대로 232'));
+    expect(c.phoneOffice, '02-6110-8337');
+    expect(c.fax, '02-6110-8339');
+    expect(c.phoneMobile, '010-2639-5980');
+    expect(c.email, 'gheh719@naver.com');
+  });
+
   test('좌표가 있으면 같은 행 조각을 합치고 큰 글자를 이름으로', () {
     final c = p.parseLines([
       OcrLine('한국노총 공공연맹', x: 0.3, y: 0.10, w: 0.3, h: 0.04),

@@ -19,6 +19,8 @@ import 'vision.dart';
 /// 촬영 → 원근 보정 크롭 → OCR → 즉시 저장 → 상세 (확인 단계 없음). 수동 셔터는 백업.
 class CaptureScreen extends ConsumerStatefulWidget {
   const CaptureScreen({super.key, this.mine = false});
+  /// "직접 입력" 을 눌러 나갔을 때의 반환값 — 호출자가 입력 폼을 연다
+  static const manualResult = '__manual__';
   /// 내 명함 등록: OCR 없이 이미지만 저장 (목록에 안 나옴)
   final bool mine;
   @override
@@ -286,20 +288,10 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> with WidgetsBindi
               ),
             ),
             // 앨범에서 가져오기 (셔터 왼쪽)
-            Positioned(
-              left: 36,
-              child: Semantics(
-                button: true, label: '앨범에서 가져오기',
-                child: GestureDetector(
-                  onTap: _capturing ? null : _pickFromAlbum,
-                  child: Container(
-                    width: 52, height: 52,
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.14), shape: BoxShape.circle, border: Border.all(color: Colors.white.withValues(alpha: 0.25))),
-                    child: const Icon(Icons.photo_library_outlined, color: Colors.white, size: 24),
-                  ),
-                ),
-              ),
-            ),
+            Positioned(left: 36, child: _SideButton(icon: Icons.photo_library_outlined, label: '앨범', semantics: '앨범에서 가져오기', onTap: _capturing ? null : _pickFromAlbum)),
+            // 직접 입력 (셔터 오른쪽) — 명함이 없을 때
+            if (!widget.mine)
+              Positioned(right: 36, child: _SideButton(icon: Icons.edit_outlined, label: '직접 입력', semantics: '직접 입력', onTap: _capturing ? null : () => Navigator.pop(context, CaptureScreen.manualResult))),
           ]),
         ),
         if (_capturing)
@@ -354,4 +346,29 @@ class _CornerPainter extends CustomPainter {
   }
   @override
   bool shouldRepaint(_CornerPainter old) => old.color != color || old.stroke != stroke;
+}
+
+/// 셔터 양옆 보조 버튼 (아이콘 + 작은 라벨)
+class _SideButton extends StatelessWidget {
+  const _SideButton({required this.icon, required this.label, required this.semantics, required this.onTap});
+  final IconData icon;
+  final String label;
+  final String semantics;
+  final VoidCallback? onTap;
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true, label: semantics,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 52, height: 52,
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.14), shape: BoxShape.circle, border: Border.all(color: Colors.white.withValues(alpha: 0.25))),
+              child: Icon(icon, color: Colors.white, size: 24),
+            ),
+            const SizedBox(height: 6),
+            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+          ]),
+        ),
+      );
 }

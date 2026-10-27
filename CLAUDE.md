@@ -56,7 +56,7 @@ tools/
 - Xcode 설치 후: `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer && sudo xcodebuild -runFirstLaunch`, `brew install cocoapods`
 - **작업 데몬**: Finder에서 `tools/daemon.command` → "다음으로 열기 → 터미널" 로 한 번 띄워두면,
   `tools/queue/NN_name.sh` 에 넣은 스크립트를 순서대로 실행하고 `tools/logs/NN_name.log` 에 기록한다. 종료는 `tools/queue/STOP` 파일.
-- 테스트: `flutter test` (Xcode 불필요, 36개 통과), 정적 분석: `flutter analyze` (0 issues)
+- 테스트: `flutter test` (Xcode 불필요, 39개 통과), 정적 분석: `flutter analyze` (0 issues)
 - 코드 생성: `dart run build_runner build` (drift)
 - 시뮬레이터 UI 검증: `flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d <UDID>` → tools/logs/shots/*.png
 - Flutter 3.47 + Xcode 27: SPM 끔(`flutter config --no-enable-swift-package-manager`), Podfile `use_frameworks! :linkage => :static`, platform 15.5
@@ -72,6 +72,9 @@ tools/
 - [ ] 3단계: 통화 식별 (iOS Call Directory Extension)
 - [x] 목록 구분자(최근=월, 이름=초성+인덱스 바, 회사=트리 접기/펴기) · 즐겨찾기(사람=상단 고정, 회사=트리 상단+펼침) · 내 명함(여러 장, 공유 시트). DB schemaVersion 2 (favorite, is_mine, company_prefs)
 - [x] 연속 등록(촬영 직후 상세의 "다음 명함" → 바로 촬영) · 중복 명함(휴대전화>이메일>이름+회사 판정, 배너 → 달라진 필드 비교 → 교체/따로/중복삭제; 메모·즐겨찾기 유지) · + 메뉴 스피드 다이얼 · 촬영 화면 앨범 가져오기
+- [x] 삭제 UX: 행 왼쪽 스와이프 → 즉시 숨김 + 5초 실행 취소(PendingDelete) / 꾹 눌러 선택 모드(체크·전체 선택·하단 삭제 바) / 파괴적 확인은 가운데 다이얼로그 대신 하단 ConfirmSheet
+- [x] + 버튼 = 바로 촬영 (메뉴 없음). 촬영 화면 셔터 양옆에 앨범·직접 입력. 빈 목록엔 "명함 없이 직접 입력" 링크
+- [x] OCR 파서 2차: 회사 줄 URL·상장배지 제거, 이름 줄 로마자/로고 기호 허용, 조직명 붙은 긴 직책, 기관명 주소 오인 방지, 약어 로고 제거
 - [ ] 4단계: 백업/복원, 초성검색
 - [x] **OCR 파서 보완 1차** — `docs/ocr-plan.md` §0~§5 반영 (픽스처 5장 + 실기기 변형 7건 테스트 통과). §6 사용자 수정 학습, §7 온디바이스 LLM 은 보류. 새 오인식 명함은 사진을 `test/fixtures/cards/` 에 넣고 `swift tools/ocr_fixtures.swift test/fixtures/cards` → `expected.json` 에 기대값 추가
 

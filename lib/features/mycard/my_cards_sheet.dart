@@ -12,6 +12,7 @@ import '../../data/db.dart';
 import '../capture/capture_screen.dart';
 import '../capture/image_io.dart';
 import '../detail/card_view_screen.dart';
+import '../list/widgets.dart';
 
 /// 내 명함 시트 (보조 화면). 여러 장 등록, 옆으로 넘겨 보기, 꾹 누르면 공유(저장·복사·에어드롭).
 class MyCardsSheet extends ConsumerStatefulWidget {
@@ -203,24 +204,9 @@ class _MyCardsSheetState extends ConsumerState<MyCardsSheet> {
   }
 
   Future<void> _delete(Contact c) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('내 명함 삭제'),
-        content: const Text('이 명함 이미지를 지워요.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), style: TextButton.styleFrom(foregroundColor: C.danger), child: const Text('삭제')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    for (final p in [c.imageFront, c.imageBack, c.thumb]) {
-      if (p != null) {
-        try { await File(ImagePaths.resolve(p)).delete(); } catch (_) {}
-      }
-    }
-    await ref.read(repoProvider).delete(c.id);
+    final ok = await ConfirmSheet.show(context, title: '내 명함 삭제', message: '이 명함 이미지를 지워요.');
+    if (!ok || !mounted) return;
+    await ref.read(repoProvider).deleteWithImages(c);
   }
 }
 

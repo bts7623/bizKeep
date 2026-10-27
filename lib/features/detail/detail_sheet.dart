@@ -229,26 +229,10 @@ class _DetailSheetState extends ConsumerState<DetailSheet> {
   }
 
   Future<void> _delete(BuildContext context, Contact c) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('${c.name.isEmpty ? '이 연락처' : c.name} 삭제'),
-        content: const Text('명함 이미지도 함께 삭제돼요.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), style: TextButton.styleFrom(foregroundColor: C.danger), child: const Text('삭제')),
-        ],
-      ),
-    );
-    if (ok == true) {
-      for (final p in [c.imageFront, c.imageBack, c.thumb]) {
-        if (p != null) {
-          try { await File(ImagePaths.resolve(p)).delete(); } catch (_) {}
-        }
-      }
-      await ref.read(repoProvider).delete(c.id);
-      if (context.mounted) Navigator.pop(context);
-    }
+    final ok = await ConfirmSheet.show(context, title: '${c.name.isEmpty ? '이 연락처' : c.name} 삭제', message: '명함 이미지도 함께 삭제돼요.');
+    if (!ok || !context.mounted) return;
+    await ref.read(repoProvider).deleteWithImages(c);
+    if (context.mounted) Navigator.pop(context);
   }
 }
 

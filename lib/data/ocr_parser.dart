@@ -95,7 +95,8 @@ class OcrParser {
   static final _mobilePrefix = RegExp(r'^(\+82[\s\-]?1[016789]|01[016789])');
   static final _labelRe = RegExp(r'^\s*(hp|h\.?p|mobile|m|h|cell|c|휴대|핸드폰|tel|t|phone|p|전화|office|o|fax|f|팩스|e-?mail|e|이메일|web|w|www|a|addr|address|주\s*소)\s*[:.]?\s*', caseSensitive: false);
   static final _segmentRe = RegExp(r'(?=(?:^|\s)(?:[TFMHCEOWPA]\.?|Tel|Fax|Mobile|Phone|H\.?P|휴대|전화|팩스)\s*[:.]?\s*)', caseSensitive: false);
-  static final _addressRe = RegExp(r'(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)[^\n]*(로|길|동|읍|면|구|시)\s*\d*[^\n]*|\(?\d{5}\)?\s*[^\n]*(로|길)\s*\d+[^\n]*');
+  /// 시·도로 시작하고 번지(로/길/동 + 숫자)까지 있거나, 우편번호(5자리)로 시작하는 줄만 주소. ("서울교통공사…" 같은 기관명 오인 방지)
+  static final _addressRe = RegExp(r'(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)[^\n]*?(로|길|동|읍|면)\s*\d+[^\n]*|^\(?\d{5}\)?\s+(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)[^\n]*|\(?\d{5}\)?\s*[^\n]*(로|길)\s*\d+[^\n]*');
   static final _addressCont = RegExp(r'^[가-힣\d\s\-]*(로|길)\s*\d+|^\d+\s*(층|호|번지)');
   static final _addressLabel = RegExp(r'^(주\s*소|address|addr|a)\s*[:.]?\s*', caseSensitive: false);
   static final _companyRe = RegExp(
@@ -110,7 +111,11 @@ class OcrParser {
   static final _logoLead = RegExp(r'^[A-Za-z]\s+(?=[A-Z]{3})');
   static final _spacedDigits = RegExp(r'\d(?:\s\d){2,}');
   static final _noise = RegExp(r'[|•·▪■□●○★☆※]+');
-  static final _leadNoise = RegExp(r'^[\dA-Za-z]{1,2}\s*/?\s+(?=[가-힣])');
+  static final _leadNoise = RegExp(r'^(?:\d{1,2}|[A-Za-z]{1,2}\s*/)\s*(?=[가-힣])');
+  /// "SMLU 서울교통공사통합노동조합" — 대문자 약어 + 기관명
+  static final _leadAbbr = RegExp(r'^[A-Z]{3,6}\s+(?=[가-힣])');
+  /// 회사명 뒤에 붙는 상장 배지·꼬리표: "더존비즈온 (OsP)", "더존비즈온 KOSPI"
+  static final _companyTail = RegExp(r'(\s*\([A-Za-z]{2,6}\)|\s+(KOSPI|KOSDAQ|OSP)\b)+\s*$', caseSensitive: false);
   static final _sepRe = RegExp(r'[\s/|,]+');
 
   ParsedCard parse(String raw) => parseLines(raw.split(RegExp(r'\r?\n')).map((l) => OcrLine(l)).toList());
@@ -202,7 +207,7 @@ class OcrParser {
     for (var i = 0; i < lines.length; i++) {
       if (consumed[i]) continue;
       final l = residue[i];
-      if (_addressRe.firstMatch(l) == null || card.address.isNotEmpty) continue;
+      if (_addressRe.firstMatch(l) == null || card.address.isNotEmpty || _companyRe.hasMatch(l)) continue;
       card.address = l.replaceFirst(_addressLabel, '').trim();
       consumed[i] = true;
       if (i + 1 < lines.length && !consumed[i + 1] && _addressCont.hasMatch(residue[i + 1]) && !_phoneRe.hasMatch(residue[i + 1])) {
@@ -307,7 +312,7 @@ class OcrParser {
       final hits = <int>[];
       for (var i = 0; i < lines.length; i++) {
         if (consumed[i]) continue;
-        if (_companyRe.hasMatch(lines[i]) && lines[i] != card.name && !_phoneRe.hasMatch(lines[i])) hits.add(i);
+        if (_companyRe.hasMatch(residue[i].trim()) && residue[i] != card.name && !_phoneRe.hasMatch(residue[i])) hits.add(i);
       }
       if (hits.isNotEmpty) {
         var pick = hits.first;
@@ -320,16 +325,16 @@ class OcrParser {
             consumed[other] = true;
           }
         }
-        card.company = lines[pick];
+        card.company = residue[pick].trim();
         consumed[pick] = true;
       }
     }
     final domain = _domainLabel(card.email);
     if (card.company.isEmpty) {
       // 한글이 섞인 짧은 미소비 줄 (이름·전화 아님)
-      final first = _firstIndex(lines, consumed, (l) => RegExp('[가-힣]').hasMatch(l) && _nameFrom(l) == null && l.length <= 30 && !_phoneRe.hasMatch(l));
+      final first = _firstIndex(residue, consumed, (l) => RegExp('[가-힣]').hasMatch(l) && _nameFrom(l) == null && l.trim().length <= 30 && !_phoneRe.hasMatch(l));
       if (first >= 0) {
-        card.company = lines[first];
+        card.company = residue[first].trim();
         consumed[first] = true;
         card.lowConfidence.add('company');
       }
@@ -342,7 +347,7 @@ class OcrParser {
         logo = lines[li];
         consumed[li] = true;
       } else if (nameLine >= 0) {
-        logo = _tokens(lines[nameLine]).where((t) => _logoLine.hasMatch(t) && t.length >= 3).firstOrNull;
+        logo = _tokens(lines[nameLine]).map((t) => t.replaceFirst(RegExp(r'^[^A-Za-z]+'), '')).where((t) => _logoLine.hasMatch(t) && t.length >= 3).firstOrNull;
       }
       if (logo != null) {
         logo = logo.replaceFirst(_logoLead, '');
@@ -363,6 +368,8 @@ class OcrParser {
       }
     }
     card.company = card.company.replaceFirst(_leadNoise, '').trim();
+    if (_companyRe.hasMatch(card.company)) card.company = card.company.replaceFirst(_leadAbbr, '').trim();
+    card.company = card.company.replaceFirst(_companyTail, '').trim();
 
     if (card.name.isEmpty) card.lowConfidence.add('name');
     if (card.company.isEmpty) card.lowConfidence.add('company');
@@ -392,6 +399,9 @@ class OcrParser {
   static String _joinSpacedDigits(String l) => l.replaceAllMapped(_spacedDigits, (m) => m.group(0)!.replaceAll(' ', ''));
 
   /// 토큰이 직책이면 정규화된 직책, 아니면 null. 한글은 접미 매칭("대표변호사"), 영문은 완전 일치.
+  /// 앞에 조직명이 붙어 길어질 수 있는 직책 ("조직강화실장", "영업본부장", "품질관리팀장")
+  static const _headTitles = ['실장', '본부장', '팀장', '센터장', '소장', '부장', '국장', '과장', '원장', '그룹장', '파트장', '지점장', '지사장', '단장', '위원장', '사업부장', '처장'];
+
   static String? _titleOf(String t, {required bool en}) {
     final lower = t.toLowerCase();
     for (final k in koTitles) {
@@ -400,6 +410,7 @@ class OcrParser {
         final prefix = t.substring(0, t.length - k.length);
         if (koTitles.contains(prefix)) return '$prefix $k';
         if (t.length <= k.length + 2) return t;
+        if (_headTitles.contains(k) && prefix.length <= 6) return t;
       }
     }
     if (en && enTitles.contains(lower)) return t;
@@ -414,7 +425,8 @@ class OcrParser {
     if (tokens.isEmpty) return null;
     final hangul = tokens.where((t) => _hangulTok.hasMatch(t)).toList();
     if (hangul.isEmpty || hangul.length != tokens.where((t) => RegExp('[가-힣]').hasMatch(t)).length) return null;
-    if (!tokens.every((t) => _hangulTok.hasMatch(t) || _latinWord.hasMatch(t))) return null;
+    // 나머지 토큰은 로마자 이름·로고 기호 등 — 숫자가 섞이면 이름 줄이 아님
+    if (!tokens.every((t) => _hangulTok.hasMatch(t) || !RegExp(r'[가-힣0-9]').hasMatch(t))) return null;
     final joined = hangul.join();
     if (joined.length < 2 || joined.length > 4) return null;
     if (_looksLikeOrg(joined) || _titleOf(joined, en: false) != null) return null;

@@ -83,14 +83,10 @@ void main() {
     await t.pumpAndSettle();
     await shot(t, '07_list_after_memo');
 
-    // + 메뉴
+    // + = 바로 촬영 (시뮬레이터엔 카메라가 없어 안내 문구 상태). 셔터 오른쪽 '직접 입력'
     await t.tap(find.bySemanticsLabel('명함 등록'));
-    await t.pump(const Duration(milliseconds: 90));
-    await binding.takeScreenshot('08a_add_menu_anim_90ms');
-    await t.pump(const Duration(milliseconds: 80));
-    await binding.takeScreenshot('08b_add_menu_anim_170ms');
-    await t.pump(const Duration(milliseconds: 400));
-    await shot(t, '08_add_menu');
+    await t.pumpAndSettle(const Duration(milliseconds: 800));
+    await shot(t, '08_capture_screen');
     await t.tap(find.text('직접 입력'));
     await shot(t, '09_new_contact');
     await t.tap(find.text('취소'));
@@ -153,5 +149,31 @@ void main() {
     await fut;
     await t.pumpAndSettle();
     await shot(t, '21_list_after_replace');
+
+    // 상세 삭제 → 하단 확인 시트
+    await t.tap(find.textContaining('박서연').first);
+    await t.pumpAndSettle();
+    await t.tap(find.byIcon(Icons.delete_outline_rounded).first);
+    await shot(t, '22_delete_sheet');
+    await t.tap(find.text('취소'));
+    await t.pumpAndSettle();
+    await t.tap(find.byIcon(Icons.close_rounded).first);
+    await t.pumpAndSettle();
+
+    // 꾹 눌러 선택 모드 → 전체 선택 → 취소
+    await t.longPress(find.textContaining('박서연').first);
+    await shot(t, '23_select_mode');
+    await t.tap(find.text('전체 선택'));
+    await shot(t, '24_select_all');
+    await t.tap(find.bySemanticsLabel('선택 취소'));
+    await t.pumpAndSettle();
+
+    // 왼쪽 스와이프 삭제 → 실행 취소
+    await t.drag(find.textContaining('박서연').first, const Offset(-500, 0));
+    await t.pumpAndSettle(const Duration(milliseconds: 500));
+    await shot(t, '25_swipe_deleted_undo');
+    await t.tap(find.text('실행 취소'));
+    await t.pumpAndSettle(const Duration(milliseconds: 500));
+    await shot(t, '26_after_undo');
   });
 }

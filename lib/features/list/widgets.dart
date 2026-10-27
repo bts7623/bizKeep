@@ -16,6 +16,9 @@ class ContactRow extends StatelessWidget {
     this.onCallLong,
     this.hint,
     this.indent = false,
+    this.onLongPress,
+    this.selecting = false,
+    this.selected = false,
   });
   final Contact contact;
   final String? hint;
@@ -24,6 +27,11 @@ class ContactRow extends StatelessWidget {
   final VoidCallback onCall;
   final VoidCallback? onCallLong;
   final bool indent;
+  /// 꾹 누르면 선택 모드 진입
+  final VoidCallback? onLongPress;
+  /// 선택 모드: 썸네일 자리에 체크, 전화 버튼 숨김, 행 탭은 토글
+  final bool selecting;
+  final bool selected;
 
   static const double heightPlain = 66;
   static const double heightWithSub = 88;
@@ -37,19 +45,44 @@ class ContactRow extends StatelessWidget {
     return Container(
       height: heightOf(contact, hint: hint),
       margin: indent ? const EdgeInsets.only(left: 14) : null,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(R.row), boxShadow: rowShadow),
+      padding: const EdgeInsets.all(8.5), // + 1.5 테두리 = 10
+      decoration: BoxDecoration(
+        color: selected ? C.accentTint : C.surface,
+        borderRadius: BorderRadius.circular(R.row),
+        boxShadow: rowShadow,
+        border: Border.all(color: selected ? C.accent : Colors.transparent, width: 1.5),
+      ),
       child: Row(
         children: [
-          Semantics(
-            button: true, label: '명함 이미지 보기',
-            child: GestureDetector(onTap: onThumbTap, child: CardThumb(contact: contact)),
-          ),
+          if (selecting)
+            GestureDetector(
+              onTap: onTap,
+              child: SizedBox(
+                width: 64, height: 40,
+                child: Center(
+                  child: Container(
+                    width: 26, height: 26,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: selected ? C.accent : Colors.transparent,
+                      border: Border.all(color: selected ? C.accent : C.inkFaint, width: 2),
+                    ),
+                    child: selected ? const Icon(Icons.check_rounded, size: 18, color: Colors.white) : null,
+                  ),
+                ),
+              ),
+            )
+          else
+            Semantics(
+              button: true, label: '명함 이미지 보기',
+              child: GestureDetector(onTap: onThumbTap, onLongPress: onLongPress, child: CardThumb(contact: contact)),
+            ),
           const SizedBox(width: 12),
           Expanded(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onTap,
+              onLongPress: selecting ? null : onLongPress,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -78,18 +111,19 @@ class ContactRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Semantics(
-            button: true, label: '${contact.name}에게 전화',
-            child: GestureDetector(
-              onTap: contact.primaryPhone.isEmpty ? null : onCall,
-              onLongPress: onCallLong,
-              child: Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(color: contact.primaryPhone.isEmpty ? C.line : C.callTint, shape: BoxShape.circle),
-                child: Icon(Icons.call, size: 20, color: contact.primaryPhone.isEmpty ? C.inkFaint : C.callInk),
+          if (!selecting)
+            Semantics(
+              button: true, label: '${contact.name}에게 전화',
+              child: GestureDetector(
+                onTap: contact.primaryPhone.isEmpty ? null : onCall,
+                onLongPress: onCallLong,
+                child: Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(color: contact.primaryPhone.isEmpty ? C.line : C.callTint, shape: BoxShape.circle),
+                  child: Icon(Icons.call, size: 20, color: contact.primaryPhone.isEmpty ? C.inkFaint : C.callInk),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -141,47 +175,6 @@ class GlassCircleButton extends StatelessWidget {
           ),
           child: Icon(icon, size: 22, color: C.ink),
         ),
-      ),
-    );
-  }
-}
-
-class GlassMenuCard extends StatelessWidget {
-  const GlassMenuCard({super.key, required this.icon, required this.dark, required this.title, required this.subtitle, required this.onTap});
-  final IconData icon;
-  final bool dark;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 72,
-        padding: const EdgeInsets.symmetric(horizontal: 18),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white),
-          boxShadow: [BoxShadow(color: C.ink.withValues(alpha: 0.22), blurRadius: 32, offset: const Offset(0, 12))],
-        ),
-        child: Row(children: [
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(color: dark ? C.ink : C.line, borderRadius: BorderRadius.circular(14)),
-            child: Icon(icon, color: dark ? Colors.white : C.ink, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: C.ink)),
-              const SizedBox(height: 2),
-              Text(subtitle, style: const TextStyle(fontSize: 13, color: C.inkMuted)),
-            ]),
-          ),
-          const Icon(Icons.chevron_right_rounded, color: C.inkFaint),
-        ]),
       ),
     );
   }
@@ -341,36 +334,52 @@ class IndexBar extends StatelessWidget {
   }
 }
 
-/// + 메뉴 항목: 흰 라벨(그림자) + 원형 버튼. 버튼은 독의 + 와 같은 56px 축.
-class SpeedDialItem extends StatelessWidget {
-  const SpeedDialItem({super.key, required this.icon, required this.dark, required this.label, required this.onTap});
-  final IconData icon;
-  final bool dark;
-  final String label;
-  final VoidCallback onTap;
+
+/// 스와이프 삭제 배경 (오른쪽 → 왼쪽)
+class SwipeDeleteBackground extends StatelessWidget {
+  const SwipeDeleteBackground({super.key});
   @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true, label: label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text(label, style: const TextStyle(
-            fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: -0.2,
-            shadows: [Shadow(color: Color(0x73000000), blurRadius: 2, offset: Offset(0, 1)), Shadow(color: Color(0x59000000), blurRadius: 16, offset: Offset(0, 4))],
-          )),
-          const SizedBox(width: 14),
-          Container(
-            width: 56, height: 56,
-            decoration: BoxDecoration(
-              color: dark ? C.ink : Colors.white, shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: C.ink.withValues(alpha: dark ? 0.3 : 0.22), blurRadius: 30, offset: const Offset(0, 10))],
-            ),
-            child: Icon(icon, color: dark ? Colors.white : C.ink, size: 26),
+  Widget build(BuildContext context) => Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 22),
+        decoration: BoxDecoration(color: C.danger, borderRadius: BorderRadius.circular(R.row)),
+        child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(Icons.delete_outline_rounded, color: Colors.white, size: 24),
+          SizedBox(height: 2),
+          Text('삭제', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+        ]),
+      );
+}
+
+/// 파괴적 동작 확인 — 가운데 다이얼로그 대신 하단 시트 (손가락·시선이 아래에 머문다)
+abstract final class ConfirmSheet {
+  static Future<bool> show(BuildContext context, {required String title, String? message, String action = '삭제'}) async {
+    final r = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: C.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(R.sheet))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(20, 14, 20, 16 + MediaQuery.paddingOf(ctx).bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: const Color(0xFFD5D8DE), borderRadius: BorderRadius.circular(3)))),
+          const SizedBox(height: 16),
+          Text(title, style: Theme.of(ctx).textTheme.headlineMedium),
+          if (message != null) ...[const SizedBox(height: 4), Text(message, style: const TextStyle(fontSize: 14, color: C.inkMuted))],
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: C.danger, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+            child: Text(action, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(height: 8),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFF0F2F5), foregroundColor: C.ink, minimumSize: const Size.fromHeight(52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+            child: const Text('취소', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           ),
         ]),
       ),
     );
+    return r == true;
   }
 }

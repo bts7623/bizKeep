@@ -1,8 +1,11 @@
 import 'dart:convert';
 
+import 'dart:io';
+
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
+import '../core/image_paths.dart';
 import 'db.dart';
 import 'ocr_parser.dart';
 import 'search_ranker.dart';
@@ -171,6 +174,16 @@ class ContactRepo {
   Future<void> delete(String id) async {
     await (db.delete(db.contacts)..where((t) => t.id.equals(id))).go();
     await db.customStatement('DELETE FROM phone_index WHERE contact_id = ?', [id]);
+  }
+
+  /// 레코드 + 명함 이미지 파일 삭제.
+  Future<void> deleteWithImages(Contact c) async {
+    for (final p in [c.imageFront, c.imageBack, c.thumb]) {
+      if (p != null) {
+        try { await File(ImagePaths.resolve(p)).delete(); } catch (_) {}
+      }
+    }
+    await delete(c.id);
   }
 
   Future<int> count() async {
