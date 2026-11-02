@@ -70,7 +70,7 @@ tools/
 - [x] 1단계 검증: iPhone 18 Pro 시뮬레이터(iOS 27) — integration_test 12장면 통과 (tools/logs/shots/)
 - [x] 2단계-A (iOS): camera + Vision 사각 검출 **자동 촬영** + 원근 보정 크롭 + Vision OCR → 즉시 저장. **실기기 검증 필요** (시뮬레이터엔 카메라 없음)
 - [ ] 2단계-B (Android): ML Kit Kotlin 채널로 `bizkeep/vision` 동일 API 구현
-- [x] 3단계: 통화 식별 — iOS Call Directory Extension (`ios/CallDirectory/`, 번들 `com.bts.bizkeep.calldir`, App Group `group.com.bts.bizkeep`). 앱이 `calldir.json`(번호 오름차순, 라벨 "이름 · 회사")을 그룹 컨테이너에 쓰고 reloadExtension. Dart: `core/calldir.dart` (연락처 변경 2초 디바운스 sync, status, openSettings), 첫 저장 후 1회 안내 시트, 설정 화면 토글=설정 앱 열기. Xcode 타겟은 `tools/add_calldir_target.rb`(xcodeproj gem, 멱등)로 추가 — Flutter/Pods xcconfig 상속 금지, 임베드 단계는 Thin Binary 앞. 문자 발신자 식별은 iOS 미지원(필터 익스텐션은 식별 불가)
+- [x] 3단계: 통화 식별 — iOS Call Directory Extension (`ios/CallDirectory/`, 번들 `com.bts.bizkeep.calldir`, App Group `group.com.bts.bizkeep`). 앱이 `calldir.json`(번호 오름차순, 라벨 "소속 이름 직책")을 그룹 컨테이너에 쓰고 reloadExtension. Dart: `core/calldir.dart` (연락처 변경 2초 디바운스 sync, status, openSettings), 첫 저장 후 1회 안내 시트, 설정 화면 토글=설정 앱 열기. Xcode 타겟은 `tools/add_calldir_target.rb`(xcodeproj gem, 멱등)로 추가 — Flutter/Pods xcconfig 상속 금지, 임베드 단계는 Thin Binary 앞. 문자 발신자 식별은 iOS 미지원(필터 익스텐션은 식별 불가)
 - [x] 목록 구분자(최근=월, 이름=초성+인덱스 바, 회사=트리 접기/펴기) · 즐겨찾기(사람=상단 고정, 회사=트리 상단+펼침) · 내 명함(여러 장, 공유 시트). DB schemaVersion 2 (favorite, is_mine, company_prefs)
 - [x] 연속 등록(촬영 직후 상세의 "다음 명함" → 바로 촬영) · 중복 명함(휴대전화>이메일>이름+회사 판정, 배너 → 달라진 필드 비교 → 교체/따로/중복삭제; 메모·즐겨찾기 유지) · + 메뉴 스피드 다이얼 · 촬영 화면 앨범 가져오기
 - [x] 삭제 UX: 행 왼쪽으로 살짝 밀면 삭제 버튼(SwipeReveal, 한 번에 한 행) → 탭하면 삭제 + 토스트 / 꾹 눌러 선택 모드(체크·전체 선택·하단 삭제 바, 하단 ConfirmSheet) / 상세·내 명함 삭제도 ConfirmSheet. 되돌리기 없음. 토스트는 widgets.dart Toast (1.6초 후 페이드)

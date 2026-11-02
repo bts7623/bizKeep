@@ -16,11 +16,12 @@ abstract final class CallDir {
   static bool get supported => Platform.isIOS;
 
   /// 연락처 → [[번호(Int, E.164 숫자만), 라벨]] 오름차순. 같은 번호는 먼저 나온(최근 등록) 사람이 이김.
+  /// 라벨: "소속 이름 직책" (예: "폭스소프트 김전영 부장"). 비어 있는 항목은 건너뜀.
   static List<List<Object>> entriesOf(Iterable<Contact> contacts) {
     final m = <int, String>{};
     for (final c in contacts) {
       if (c.isMine) continue;
-      final label = [c.name, c.company].where((s) => s.isNotEmpty).join(' · ');
+      final label = [c.company, c.name, c.title].where((s) => s.isNotEmpty).join(' ');
       if (label.isEmpty) continue;
       for (final ph in [c.phoneMobile, c.phoneOffice]) {
         final e = OcrParser.toE164(ph);
