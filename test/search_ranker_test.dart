@@ -80,4 +80,21 @@ void main() {
     final many = List.generate(300, (i) => SearchDoc(id: '$i', name: '테스트$i', createdAt: i));
     expect(r.rank('테스트', many).length, 200);
   });
+
+  test('초성 검색: 이름 초성 prefix > 완전 일치 우선, 회사도', () {
+    const r = SearchRanker();
+    final docs = [
+      const SearchDoc(id: '1', name: '김전영', company: '폭스소프트'),
+      const SearchDoc(id: '2', name: '김지영', company: '교육부'),
+      const SearchDoc(id: '3', name: '박서연', company: '가전연구소'),
+    ];
+    expect(chosungOf('김전영'), 'ㄱㅈㅇ');
+    final hits = r.rank('ㄱㅈㅇ', docs);
+    expect(hits.map((h) => h.doc.id), ['1', '2', '3']); // 이름 완전일치 > 이름 prefix > 회사(가전연구소)
+    expect(hits.first.score, 95);
+    expect(hits.last.field, MatchField.company);
+    final byCompany = r.rank('ㄱㅈ', docs);
+    expect(byCompany.map((h) => h.doc.id), containsAll(['1', '2', '3'])); // 김전영·김지영(이름) + 가전연구소(회사)
+    expect(byCompany.last.doc.id, '3');
+  });
 }

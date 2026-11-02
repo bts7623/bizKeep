@@ -2,7 +2,7 @@
 ///
 /// 규칙 (docs/spec.md §4)
 /// - 입력 ≤2글자: 이름·회사만. ≥3글자: 전 필드.
-/// - 숫자로 시작 → 번호 우선. '@' 포함 → 이메일 우선.
+/// - 숫자로 시작 → 번호 우선. '@' 포함 → 이메일 우선. 초성만(ㄱ-ㅎ) → 초성 검색(이름 > 회사).
 /// - 가중치: 이름 완전일치 100 > 이름 prefix 80 > 회사 60 > 직책/부서 40
 ///   > 번호·메일 30 > 주소·메모 20 > OCR 원문 10. 동점은 최근 등록순.
 library;
@@ -50,7 +50,23 @@ class SearchHit {
   const SearchHit(this.doc, this.score, this.field, this.hint);
 }
 
-enum QueryKind { text, phone, email }
+enum QueryKind { text, phone, email, chosung }
+
+/// 한글 초성 추출: "김전영" → "ㄱㅈㅇ". 한글이 아닌 글자는 그대로.
+String chosungOf(String s) {
+  const cho = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+  final b = StringBuffer();
+  for (final r in s.runes) {
+    if (r >= 0xAC00 && r <= 0xD7A3) {
+      b.write(cho[(r - 0xAC00) ~/ 588]);
+    } else {
+      b.writeCharCode(r);
+    }
+  }
+  return b.toString();
+}
+
+final _onlyChosung = RegExp(r'^[ㄱ-ㅎ]+$');
 
 class SearchQuery {
   final String raw;
@@ -69,8 +85,10 @@ class SearchQuery {
       kind = QueryKind.phone;
     } else if (norm.contains('@')) {
       kind = QueryKind.email;
+    } else if (_onlyChosung.hasMatch(norm)) {
+      kind = QueryKind.chosung;
     }
-    final allFields = kind != QueryKind.text || _charLen(norm) >= 3;
+    final allFields = kind == QueryKind.phone || kind == QueryKind.email || (kind == QueryKind.text && _charLen(norm) >= 3);
     return SearchQuery._(input, norm, digits, kind, allFields);
   }
 
@@ -127,6 +145,24 @@ class SearchRanker {
       if (o.contains(q.digits)) consider(o.startsWith(q.digits) ? 85 : 65, MatchField.phone, d.phoneOffice);
       if (best == 0) return null;
       return SearchHit(d, best, field!, _hint(field!, hintText));
+    }
+
+    if (q.kind == QueryKind.chosung) {
+      // 초성 검색: 이름(ㄱㅈㅇ → 김전영) > 회사. 공백 제거 후 비교.
+      final nameC = chosungOf(d.name.replaceAll(' ', ''));
+      if (nameC.startsWith(n)) {
+        consider(nameC.length == n.length ? 95 : 80, MatchField.name);
+      } else if (nameC.contains(n)) {
+        consider(65, MatchField.name);
+      }
+      final compC = chosungOf(d.company.replaceAll(' ', ''));
+      if (compC.startsWith(n)) {
+        consider(60, MatchField.company);
+      } else if (n.length >= 2 && compC.contains(n)) {
+        consider(50, MatchField.company);
+      }
+      if (best == 0) return null;
+      return SearchHit(d, best, field!, null);
     }
 
     if (q.kind == QueryKind.email) {

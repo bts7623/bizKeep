@@ -1,7 +1,11 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/actions.dart';
 import '../../core/calldir.dart';
+import '../../data/backup.dart';
+import '../list/widgets.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 
@@ -37,8 +41,8 @@ class SettingsScreen extends ConsumerWidget {
           ]),
           const SizedBox(height: 22),
           _Group(title: '데이터', children: [
-            _Action(icon: Icons.download_rounded, title: '내려받기', sub: '명함 이미지 포함 · zip 파일', onTap: () => _soon(context)),
-            _Action(icon: Icons.upload_rounded, title: '가져오기', sub: '다른 기기에서 내려받은 파일 일괄 등록', onTap: () => _soon(context)),
+            _Action(icon: Icons.download_rounded, title: '내려받기', sub: '명함 $total명 · 사진·CSV 포함 zip', onTap: () => _export(context, ref)),
+            _Action(icon: Icons.upload_rounded, title: '가져오기', sub: '내려받은 zip 선택 · 같은 명함은 최신 쪽 유지', onTap: () => _import(context, ref)),
             const _Toggle(title: '명함 원본 이미지 보관', sub: '끄면 텍스트만 저장', value: true, enabled: false, last: true),
           ]),
           const SizedBox(height: 22),
@@ -67,8 +71,57 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _soon(BuildContext context) =>
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('4단계에서 추가돼요'), behavior: SnackBarBehavior.floating));
+  Future<void> _export(BuildContext context, WidgetRef ref) async {
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = box == null ? null : (box.localToGlobal(Offset.zero) & box.size);
+    _busy(context, '백업 파일 만드는 중…');
+    try {
+      final file = await Backup.export(ref.read(dbProvider));
+      if (!context.mounted) return;
+      Navigator.pop(context); // busy
+      await Act.shareFile(file.path, origin: origin);
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.pop(context);
+      Toast.show(context, '백업에 실패했어요', icon: Icons.error_outline_rounded);
+    }
+  }
+
+  Future<void> _import(BuildContext context, WidgetRef ref) async {
+    final picked = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['zip']);
+    final path = picked.isEmpty ? null : picked.first.path;
+    if (path == null || !context.mounted) return;
+    _busy(context, '가져오는 중…');
+    final r = await Backup.import(ref.read(dbProvider), ref.read(repoProvider), path);
+    if (!context.mounted) return;
+    Navigator.pop(context);
+    if (r.error != null) {
+      Toast.show(context, r.error!, icon: Icons.error_outline_rounded);
+    } else {
+      Toast.show(context, '추가 ${r.added} · 갱신 ${r.updated} · 건너뜀 ${r.skipped}');
+    }
+  }
+
+  void _busy(BuildContext context, String text) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Center(
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(16)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(width: 12),
+            Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: C.ink)),
+          ]),
+        ),
+        ),
+      ),
+    );
+  }
 }
 
 class _Group extends StatelessWidget {

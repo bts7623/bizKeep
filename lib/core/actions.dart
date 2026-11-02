@@ -24,6 +24,10 @@ abstract final class Act {
     }
   }
 
+  /// 파일 하나 공유 (백업 zip → "파일에 저장" 등)
+  static Future<void> shareFile(String path, {Rect? origin}) =>
+      SharePlus.instance.share(ShareParams(files: [XFile(path, mimeType: 'application/zip')], sharePositionOrigin: origin));
+
   /// iOS 공유 시트 — 이미지 저장·복사·에어드롭·메신저 전송을 한 번에.
   static Future<void> shareImages(List<String> paths, {Rect? origin}) =>
       SharePlus.instance.share(ShareParams(files: [for (final p in paths) XFile(p, mimeType: 'image/jpeg')], sharePositionOrigin: origin));

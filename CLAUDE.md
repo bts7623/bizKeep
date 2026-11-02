@@ -28,7 +28,8 @@ lib/
   data/
     db.dart                # drift 스키마 + FTS5 + 마이그레이션
     contact_repo.dart      # CRUD, 검색, 내보내기/가져오기
-    search_ranker.dart     # 검색 가중치·우선순위 (순수 Dart, 테스트 대상)
+    search_ranker.dart     # 검색 가중치·우선순위·초성검색 (순수 Dart, 테스트 대상)
+    backup.dart            # zip 백업/복원
     ocr_parser.dart        # OCR 텍스트 → 필드 분류 (순수 Dart, 테스트 대상)
     list_grouper.dart      # 정렬 모드별 섹션(월·초성·회사 트리)·즐겨찾기 배치 (순수 Dart, 테스트 대상)
   features/
@@ -77,7 +78,7 @@ tools/
 - [x] 명함 크게 보기: 우상단 사진 저장(gal)·공유 아이콘, 이미지 꾹 누르면 공유. 내 명함 시트도 저장 버튼 추가. danger 색은 코랄(#D9655C)로 톤 다운
 - [x] + 버튼 = 바로 촬영 (메뉴 없음). 촬영 화면 셔터 양옆에 앨범·직접 입력. 빈 목록엔 "명함 없이 직접 입력" 링크
 - [x] OCR 파서 2차: 회사 줄 URL·상장배지 제거, 이름 줄 로마자/로고 기호 허용, 조직명 붙은 긴 직책, 기관명 주소 오인 방지, 약어 로고 제거
-- [ ] 4단계: 백업/복원, 초성검색
+- [x] 4단계: 백업/복원(`data/backup.dart` — zip: contacts.json + contacts.csv(BOM) + images/회사_이름_직책.jpg + my_cards/; 내려받기=공유 시트, 가져오기=file_picker; UUID 같으면 updated_at 최신 쪽, 압축·해제는 isolate) · 초성검색(`chosungOf`, 초성만 입력 시 이름>회사)
 - [x] **OCR 파서 보완 1차** — `docs/ocr-plan.md` §0~§5 반영 (픽스처 5장 + 실기기 변형 7건 테스트 통과). §6 사용자 수정 학습, §7 온디바이스 LLM 은 보류. 새 오인식 명함은 사진을 `test/fixtures/cards/` 에 넣고 `swift tools/ocr_fixtures.swift test/fixtures/cards` → `expected.json` 에 기대값 추가
 
 ## 아이디어 백로그 (우선순위 순, 검토 의견은 대화 기록)

@@ -154,14 +154,14 @@ class ContactRepo {
     );
     await db.into(db.contacts).insert(row);
     final c = await get(row.id.value);
-    await _syncPhoneIndex(c!);
+    await syncPhoneIndex(c!);
     return c;
   }
 
   Future<void> update(Contact c) async {
     final updated = c.copyWith(memo: _clipMemo(c.memo), updatedAt: DateTime.now().millisecondsSinceEpoch);
     await db.update(db.contacts).replace(updated);
-    await _syncPhoneIndex(updated);
+    await syncPhoneIndex(updated);
   }
 
   Future<void> updateMemo(String id, String memo) async {
@@ -191,7 +191,8 @@ class ContactRepo {
     return r.read<int>('c');
   }
 
-  Future<void> _syncPhoneIndex(Contact c) async {
+  /// 통화 식별용 phone_index 갱신 (백업 복원에서도 사용)
+  Future<void> syncPhoneIndex(Contact c) async {
     await db.customStatement('DELETE FROM phone_index WHERE contact_id = ?', [c.id]);
     if (c.isMine) return;
     for (final ph in [c.phoneMobile, c.phoneOffice]) {
