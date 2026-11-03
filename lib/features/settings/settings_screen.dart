@@ -52,7 +52,10 @@ class SettingsScreen extends ConsumerWidget {
               child: Row(children: [
                 Container(
                   width: 48, height: 48,
-                  decoration: BoxDecoration(color: C.navy, borderRadius: BorderRadius.circular(14)),
+                  decoration: BoxDecoration(
+                    color: Colors.white, borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: C.line, width: 1),
+                  ),
                   child: const _MiniIcon(),
                 ),
                 const SizedBox(width: 14),
@@ -60,7 +63,7 @@ class SettingsScreen extends ConsumerWidget {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text('BizKeep 0.1.0', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: C.ink)),
                     SizedBox(height: 2),
-                    Text('명함을 찍어두면 바로 찾고 바로 거는 업무 연락처', style: TextStyle(fontSize: 13, color: C.inkMuted)),
+                    Text('명함을 간편하게 저장하고 관리하자 - BTS', style: TextStyle(fontSize: 13, color: C.inkMuted)),
                   ]),
                 ),
               ]),
@@ -196,14 +199,34 @@ class _Action extends StatelessWidget {
 class _MiniIcon extends StatelessWidget {
   const _MiniIcon();
   @override
-  Widget build(BuildContext context) => Stack(children: [
-        for (final (i, color) in [C.accent, const Color(0xFF7FA3FF), Colors.white].indexed)
-          Positioned(
-            left: 11.0 - i * 2.5, top: 11.0 + i * 5,
-            child: Transform.rotate(
-              angle: -0.1,
-              child: Container(width: 26, height: 17, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
-            ),
-          ),
-      ]);
+  Widget build(BuildContext context) => const CustomPaint(size: Size(48, 48), painter: _MiniIconPainter());
+}
+
+/// 앱 아이콘(뷰파인더 변주)의 축소판: 네이비 브래킷 + 파란 명함.
+class _MiniIconPainter extends CustomPainter {
+  const _MiniIconPainter();
+  @override
+  void paint(Canvas canvas, Size size) {
+    final k = size.width / 180; // 아이콘 원본 좌표계(180) → 위젯
+    final stroke = Paint()
+      ..color = C.navy
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 9 * k
+      ..strokeCap = StrokeCap.round;
+    final path = Path()
+      ..moveTo(34 * k, 64 * k)..lineTo(34 * k, 48 * k)..arcToPoint(Offset(48 * k, 34 * k), radius: Radius.circular(14 * k))..lineTo(64 * k, 34 * k)
+      ..moveTo(116 * k, 34 * k)..lineTo(132 * k, 34 * k)..arcToPoint(Offset(146 * k, 48 * k), radius: Radius.circular(14 * k))..lineTo(146 * k, 64 * k)
+      ..moveTo(146 * k, 116 * k)..lineTo(146 * k, 132 * k)..arcToPoint(Offset(132 * k, 146 * k), radius: Radius.circular(14 * k))..lineTo(116 * k, 146 * k)
+      ..moveTo(64 * k, 146 * k)..lineTo(48 * k, 146 * k)..arcToPoint(Offset(34 * k, 132 * k), radius: Radius.circular(14 * k))..lineTo(34 * k, 116 * k);
+    canvas.drawPath(path, stroke);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(52 * k, 66 * k, 76 * k, 48 * k), Radius.circular(8 * k)), Paint()..color = C.accent);
+    void line(double x, double y, double w, double h, double a) =>
+        canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(x * k, y * k, w * k, h * k), Radius.circular(h * k / 2)), Paint()..color = Colors.white.withValues(alpha: a));
+    line(62, 76, 16, 6, 0.7);
+    line(62, 88, 44, 5, 1);
+    line(62, 99, 30, 4, 0.5);
+  }
+
+  @override
+  bool shouldRepaint(_MiniIconPainter old) => false;
 }
