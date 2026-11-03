@@ -230,14 +230,40 @@ class _DetailSheetState extends ConsumerState<DetailSheet> {
     if (mounted) setState(() { _id = old.id; _dup = null; });
   }
 
-  /// 폰 주소록에 저장 (설정: # 접두어 · 저장 전 양식 확인).
+  /// 폰 주소록에 저장. 같은 번호·메일이 이미 있으면 덮어쓰기/따로 추가를 묻는다.
   Future<void> _saveToPhoneBook(BuildContext context, Contact c) async {
     final prefs = ref.read(phoneBookPrefsProvider);
-    final r = await PhoneBook.save(c, prefs);
+    final (err, match) = await PhoneBook.lookup(c, prefs);
     if (!context.mounted) return;
+    if (err != null) return _showPhoneBookResult(context, err, c, prefs);
+    PhoneBookResult r;
+    if (match == null) {
+      r = await PhoneBook.insert(c, prefs);
+    } else if (match.changes.isEmpty) {
+      r = PhoneBookResult.unchanged;
+    } else {
+      final choice = await showModalBottomSheet<String>(
+        context: context,
+        useSafeArea: true,
+        backgroundColor: C.surface,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(R.sheet))),
+        builder: (_) => _PhoneDupSheet(match: match),
+      );
+      if (!context.mounted || choice == null) return;
+      r = choice == 'overwrite' ? await PhoneBook.overwrite(match, c, prefs) : await PhoneBook.insert(c, prefs);
+    }
+    if (context.mounted) _showPhoneBookResult(context, r, c, prefs);
+  }
+
+  void _showPhoneBookResult(BuildContext context, PhoneBookResult r, Contact c, PhoneBookPrefs prefs) {
+    final name = PhoneBook.displayName(c, hash: prefs.hash);
     switch (r) {
       case PhoneBookResult.saved:
-        Toast.show(context, '연락처에 저장했어요 · ${PhoneBook.displayName(c, hash: prefs.hash)}', icon: Icons.check_rounded);
+        Toast.show(context, '연락처에 저장했어요 · $name', icon: Icons.check_rounded);
+      case PhoneBookResult.updated:
+        Toast.show(context, '연락처를 갱신했어요 · $name', icon: Icons.check_rounded);
+      case PhoneBookResult.unchanged:
+        Toast.show(context, '이미 같은 내용으로 저장돼 있어요', icon: Icons.check_rounded);
       case PhoneBookResult.opened:
         Toast.show(context, '연락처에 저장했어요', icon: Icons.check_rounded);
       case PhoneBookResult.cancelled:
@@ -260,6 +286,59 @@ class _DetailSheetState extends ConsumerState<DetailSheet> {
     if (!context.mounted) return;
     Toast.show(context, '삭제되었습니다');
     Navigator.pop(context);
+  }
+}
+
+/// 주소록에 같은 사람이 있을 때: 달라지는 항목을 보여주고 덮어쓰기/따로 추가.
+class _PhoneDupSheet extends StatelessWidget {
+  const _PhoneDupSheet({required this.match});
+  final PhoneBookMatch match;
+  @override
+  Widget build(BuildContext context) {
+    final e = match.existing;
+    final sub = [e.phones.firstOrNull?.number, e.emails.firstOrNull?.address].whereType<String>().where((s) => s.isNotEmpty).join(' · ');
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 14, 20, 16 + MediaQuery.paddingOf(context).bottom),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: const Color(0xFFD5D8DE), borderRadius: BorderRadius.circular(3)))),
+        const SizedBox(height: 16),
+        Text('이미 주소록에 있어요', style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 4),
+        Text('${PhoneBook.nameOf(e).isEmpty ? '(이름 없음)' : PhoneBook.nameOf(e)}${sub.isEmpty ? '' : ' · $sub'}', style: const TextStyle(fontSize: 14, color: C.inkMuted)),
+        const SizedBox(height: 14),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+          decoration: BoxDecoration(color: C.surfaceAlt, borderRadius: BorderRadius.circular(R.box)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            for (final line in match.changes.take(6))
+              Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Text(line, style: const TextStyle(fontSize: 14, color: C.ink), maxLines: 2, overflow: TextOverflow.ellipsis)),
+            if (match.changes.length > 6) Text('외 ${match.changes.length - 6}개', style: const TextStyle(fontSize: 13, color: C.inkMuted)),
+          ]),
+        ),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(
+            child: FilledButton(
+              onPressed: () => Navigator.pop(context, 'add'),
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFF0F2F5), foregroundColor: C.ink, minimumSize: const Size.fromHeight(52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+              child: const Text('따로 추가', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 2,
+            child: FilledButton(
+              onPressed: () => Navigator.pop(context, 'overwrite'),
+              style: FilledButton.styleFrom(backgroundColor: C.ink, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+              child: const Text('덮어쓰기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        const Center(child: Text('덮어쓰기는 명함에 있는 항목만 바꾸고, 주소록에만 있는 정보는 그대로 둬요', style: TextStyle(fontSize: 12, color: C.inkFaint))),
+      ]),
+    );
   }
 }
 

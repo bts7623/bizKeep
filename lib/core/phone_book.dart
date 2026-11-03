@@ -39,7 +39,15 @@ class PhoneBookPrefsNotifier extends StateNotifier<PhoneBookPrefs> {
 
 final phoneBookPrefsProvider = StateNotifierProvider<PhoneBookPrefsNotifier, PhoneBookPrefs>((_) => PhoneBookPrefsNotifier());
 
-enum PhoneBookResult { saved, opened, denied, cancelled, failed }
+enum PhoneBookResult { saved, updated, unchanged, opened, denied, cancelled, failed }
+
+/// 주소록에 이미 있는 연락처와의 비교 결과.
+class PhoneBookMatch {
+  const PhoneBookMatch(this.existing, this.changes);
+  final fc.Contact existing;
+  /// 사람이 읽는 변경 요약 ("이름: 홍길동 → #안전원_홍길동_대리"). 비어 있으면 달라진 게 없음.
+  final List<String> changes;
+}
 
 abstract final class PhoneBook {
   /// 주소록용 표시 이름. 순수 함수 (테스트 대상).
@@ -50,38 +58,137 @@ abstract final class PhoneBook {
     return hash ? '#$body' : body;
   }
 
-  static fc.Contact _build(Contact c, PhoneBookPrefs prefs) {
-    final fcC = fc.Contact(
-      name: fc.Name(first: displayName(c, hash: prefs.hash)),
-      organizations: [
-        if (c.company.isNotEmpty || c.title.isNotEmpty || c.department.isNotEmpty)
-          fc.Organization(company: c.company, title: c.title, department: c.department),
-      ],
-      phones: [
-        if (c.phoneMobile.isNotEmpty) fc.Phone(c.phoneMobile, label: fc.PhoneLabel.mobile),
-        if (c.phoneOffice.isNotEmpty) fc.Phone(c.phoneOffice, label: fc.PhoneLabel.work),
-        if (c.fax.isNotEmpty) fc.Phone(c.fax, label: fc.PhoneLabel.faxWork),
-      ],
-      emails: [if (c.email.isNotEmpty) fc.Email(c.email, label: fc.EmailLabel.work)],
-      addresses: [if (c.address.isNotEmpty) fc.Address(c.address, label: fc.AddressLabel.work)],
-      websites: [if (c.website.isNotEmpty) fc.Website(c.website, label: fc.WebsiteLabel.work)],
-      notes: [if (c.memo.isNotEmpty) fc.Note(c.memo)],
-    );
-    return fcC;
+  static String digits(String s) {
+    var d = s.replaceAll(RegExp(r'\D'), '');
+    if (d.startsWith('82') && d.length >= 11) d = '0${d.substring(2)}'; // +82 10 → 010
+    return d;
   }
 
-  /// 설정에 따라 바로 저장하거나(saved) 연락처 앱 양식을 연다(opened).
-  static Future<PhoneBookResult> save(Contact c, PhoneBookPrefs prefs) async {
+  static bool _samePhone(String a, String b) {
+    final x = digits(a), y = digits(b);
+    if (x.isEmpty || y.isEmpty) return false;
+    if (x == y) return true;
+    // 국가번호·하이픈 차이는 무시: 뒤 8자리가 같으면 같은 번호 (휴대전화 010-XXXX-XXXX)
+    return x.length >= 8 && y.length >= 8 && x.substring(x.length - 8) == y.substring(y.length - 8);
+  }
+
+  /// 주소록 목록에서 같은 사람 찾기: 휴대전화 번호 → 이메일. 순수 함수 (테스트 대상).
+  static fc.Contact? findIn(List<fc.Contact> all, Contact c) {
+    final mobile = digits(c.phoneMobile);
+    final email = c.email.trim().toLowerCase();
+    if (mobile.isNotEmpty) {
+      for (final e in all) {
+        if (e.phones.any((p) => _samePhone(p.number, c.phoneMobile))) return e;
+      }
+    }
+    if (email.isNotEmpty) {
+      for (final e in all) {
+        if (e.emails.any((m) => m.address.trim().toLowerCase() == email)) return e;
+      }
+    }
+    return null;
+  }
+
+  /// 명함 기준으로 달라지는 항목 요약. 순수 함수 (테스트 대상).
+  static List<String> diff(fc.Contact e, Contact c, {required bool hash}) {
+    final out = <String>[];
+    final name = displayName(c, hash: hash);
+    if (nameOf(e) != name) out.add('이름: ${_or(nameOf(e))} → $name');
+    final org = e.organizations.firstOrNull;
+    if (c.company.isNotEmpty && (org?.company ?? '') != c.company) out.add('회사: ${_or(org?.company)} → ${c.company}');
+    if (c.title.isNotEmpty && (org?.title ?? '') != c.title) out.add('직책: ${_or(org?.title)} → ${c.title}');
+    if (c.department.isNotEmpty && (org?.department ?? '') != c.department) out.add('부서: ${_or(org?.department)} → ${c.department}');
+    for (final (label, v) in [('휴대전화', c.phoneMobile), ('사무실', c.phoneOffice), ('팩스', c.fax)]) {
+      if (v.isNotEmpty && !e.phones.any((p) => _samePhone(p.number, v))) out.add('$label 추가: $v');
+    }
+    if (c.email.isNotEmpty && !e.emails.any((m) => m.address.trim().toLowerCase() == c.email.trim().toLowerCase())) out.add('이메일 추가: ${c.email}');
+    if (c.address.isNotEmpty && !e.addresses.any((a) => a.address.trim() == c.address.trim())) out.add('주소 추가: ${c.address}');
+    if (c.website.isNotEmpty && !e.websites.any((w) => w.url.trim() == c.website.trim())) out.add('웹 추가: ${c.website}');
+    if (c.memo.isNotEmpty && !e.notes.any((n) => n.note.trim() == c.memo.trim())) out.add('메모 추가: ${c.memo}');
+    return out;
+  }
+
+  static String _or(String? s) => (s == null || s.isEmpty) ? '(없음)' : s;
+
+  /// 주소록 연락처의 표시 이름 (displayName 은 플랫폼이 채우므로 테스트·직접 생성 시엔 name 에서 조립).
+  static String nameOf(fc.Contact e) {
+    final d = e.displayName.trim();
+    if (d.isNotEmpty) return d;
+    return [e.name.last, e.name.first].where((s) => s.trim().isNotEmpty).join(' ').trim();
+  }
+
+  /// 기존 연락처에 명함 내용을 덮어쓴다. 명함에 있는 항목만 갱신하고, 주소록에만 있는 번호·생일 등은 그대로 둔다.
+  static void applyTo(fc.Contact e, Contact c, {required bool hash}) {
+    e.name = fc.Name(first: displayName(c, hash: hash));
+    e.displayName = displayName(c, hash: hash);
+    if (c.company.isNotEmpty || c.title.isNotEmpty || c.department.isNotEmpty) {
+      final org = e.organizations.firstOrNull ?? fc.Organization();
+      if (c.company.isNotEmpty) org.company = c.company;
+      if (c.title.isNotEmpty) org.title = c.title;
+      if (c.department.isNotEmpty) org.department = c.department;
+      if (e.organizations.isEmpty) e.organizations = [org];
+    }
+    for (final (v, label) in [(c.phoneMobile, fc.PhoneLabel.mobile), (c.phoneOffice, fc.PhoneLabel.work), (c.fax, fc.PhoneLabel.faxWork)]) {
+      if (v.isNotEmpty && !e.phones.any((p) => _samePhone(p.number, v))) e.phones = [...e.phones, fc.Phone(v, label: label)];
+    }
+    if (c.email.isNotEmpty && !e.emails.any((m) => m.address.trim().toLowerCase() == c.email.trim().toLowerCase())) e.emails = [...e.emails, fc.Email(c.email, label: fc.EmailLabel.work)];
+    if (c.address.isNotEmpty && !e.addresses.any((a) => a.address.trim() == c.address.trim())) e.addresses = [...e.addresses, fc.Address(c.address, label: fc.AddressLabel.work)];
+    if (c.website.isNotEmpty && !e.websites.any((w) => w.url.trim() == c.website.trim())) e.websites = [...e.websites, fc.Website(c.website, label: fc.WebsiteLabel.work)];
+    if (c.memo.isNotEmpty && !e.notes.any((n) => n.note.trim() == c.memo.trim())) e.notes = [...e.notes, fc.Note(c.memo)];
+  }
+
+  static fc.Contact _build(Contact c, PhoneBookPrefs prefs) => fc.Contact(
+        name: fc.Name(first: displayName(c, hash: prefs.hash)),
+        organizations: [
+          if (c.company.isNotEmpty || c.title.isNotEmpty || c.department.isNotEmpty)
+            fc.Organization(company: c.company, title: c.title, department: c.department),
+        ],
+        phones: [
+          if (c.phoneMobile.isNotEmpty) fc.Phone(c.phoneMobile, label: fc.PhoneLabel.mobile),
+          if (c.phoneOffice.isNotEmpty) fc.Phone(c.phoneOffice, label: fc.PhoneLabel.work),
+          if (c.fax.isNotEmpty) fc.Phone(c.fax, label: fc.PhoneLabel.faxWork),
+        ],
+        emails: [if (c.email.isNotEmpty) fc.Email(c.email, label: fc.EmailLabel.work)],
+        addresses: [if (c.address.isNotEmpty) fc.Address(c.address, label: fc.AddressLabel.work)],
+        websites: [if (c.website.isNotEmpty) fc.Website(c.website, label: fc.WebsiteLabel.work)],
+        notes: [if (c.memo.isNotEmpty) fc.Note(c.memo)],
+      );
+
+  /// 1단계: 권한 확인 후 주소록에서 같은 사람 찾기. 권한 거부면 null 과 denied 를 구분하기 위해 예외 대신 레코드로.
+  static Future<(PhoneBookResult?, PhoneBookMatch?)> lookup(Contact c, PhoneBookPrefs prefs) async {
+    try {
+      if (!await fc.FlutterContacts.requestPermission(readonly: false)) return (PhoneBookResult.denied, null);
+      if (c.phoneMobile.isEmpty && c.email.isEmpty) return (null, null);
+      final all = await fc.FlutterContacts.getContacts(withProperties: true, withPhoto: false);
+      final hit = findIn(all, c);
+      if (hit == null) return (null, null);
+      return (null, PhoneBookMatch(hit, diff(hit, c, hash: prefs.hash)));
+    } catch (_) {
+      return (PhoneBookResult.failed, null);
+    }
+  }
+
+  /// 새로 저장 (설정에 따라 바로 insert 하거나 연락처 앱 양식을 연다).
+  static Future<PhoneBookResult> insert(Contact c, PhoneBookPrefs prefs) async {
     try {
       final draft = _build(c, prefs);
       if (prefs.confirm) {
-        // 양식 열기는 권한이 필요 없음 (iOS). 저장 여부는 사용자가 양식에서 결정.
         final r = await fc.FlutterContacts.openExternalInsert(draft);
         return r == null ? PhoneBookResult.cancelled : PhoneBookResult.opened;
       }
-      if (!await fc.FlutterContacts.requestPermission(readonly: false)) return PhoneBookResult.denied;
       await draft.insert();
       return PhoneBookResult.saved;
+    } catch (_) {
+      return PhoneBookResult.failed;
+    }
+  }
+
+  /// 기존 연락처 덮어쓰기.
+  static Future<PhoneBookResult> overwrite(PhoneBookMatch m, Contact c, PhoneBookPrefs prefs) async {
+    try {
+      applyTo(m.existing, c, hash: prefs.hash);
+      await m.existing.update();
+      return PhoneBookResult.updated;
     } catch (_) {
       return PhoneBookResult.failed;
     }
