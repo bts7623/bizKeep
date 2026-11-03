@@ -296,7 +296,7 @@ class _PhoneDupSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final e = match.existing;
-    final sub = [e.phones.firstOrNull?.number, e.emails.firstOrNull?.address].whereType<String>().where((s) => s.isNotEmpty).join(' · ');
+    final sub = [e.phones.firstOrNull, e.emails.firstOrNull].whereType<String>().where((s) => s.isNotEmpty).join(' · ');
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 14, 20, 16 + MediaQuery.paddingOf(context).bottom),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -304,7 +304,7 @@ class _PhoneDupSheet extends StatelessWidget {
         const SizedBox(height: 16),
         Text('이미 주소록에 있어요', style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 4),
-        Text('${PhoneBook.nameOf(e).isEmpty ? '(이름 없음)' : PhoneBook.nameOf(e)}${sub.isEmpty ? '' : ' · $sub'}', style: const TextStyle(fontSize: 14, color: C.inkMuted)),
+        Text('${e.name.trim().isEmpty ? '(이름 없음)' : e.name.trim()}${sub.isEmpty ? '' : ' · $sub'}', style: const TextStyle(fontSize: 14, color: C.inkMuted)),
         const SizedBox(height: 14),
         Container(
           width: double.infinity,

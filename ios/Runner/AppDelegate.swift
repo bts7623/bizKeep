@@ -15,6 +15,7 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "VisionPlugin") {
       VisionPlugin.register(with: registrar.messenger())
       CallDirPlugin.register(with: registrar.messenger())
+      PhoneBookPlugin.register(with: registrar.messenger())
     }
   }
 }
