@@ -38,7 +38,7 @@ lib/
     edit/                  # 직접 입력·수정 폼
     capture/               # 카메라 → OCR → 즉시 저장 (mine: true 면 내 명함, OCR 없이 이미지만)
     mycard/                # 내 명함 시트: 여러 장 등록(촬영·앨범), 넘겨 보기, 꾹 눌러 공유(저장·복사·에어드롭)
-    settings/              # 통화식별·백업·정보
+    settings/              # 통화식별·연락처 저장 규칙·백업·정보
 test/
   search_ranker_test.dart
   ocr_parser_test.dart
@@ -79,6 +79,8 @@ tools/
 - [x] + 버튼 = 바로 촬영 (메뉴 없음). 촬영 화면 셔터 양옆에 앨범·직접 입력. 빈 목록엔 "명함 없이 직접 입력" 링크
 - [x] OCR 파서 2차: 회사 줄 URL·상장배지 제거, 이름 줄 로마자/로고 기호 허용, 조직명 붙은 긴 직책, 기관명 주소 오인 방지, 약어 로고 제거
 - [x] 4단계: 백업/복원(`data/backup.dart` — zip: contacts.json + contacts.csv(BOM) + images/회사_이름_직책.jpg + my_cards/; 내려받기=공유 시트, 가져오기=file_picker; UUID 같으면 updated_at 최신 쪽, 압축·해제는 isolate) · 초성검색(`chosungOf`, 초성만 입력 시 이름>회사)
+- [x] 앱 아이콘: 흰 배경 뷰파인더(네이비 브래킷 + 파란 명함). 원본은 디자인 캔버스 Icons3 보드, 설정 화면 `_MiniIconPainter` 동일 도형
+- [x] 폰 주소록 저장(`core/phone_book.dart`, flutter_contacts): 상세 헤더 사람+ 아이콘 → 이름 `[#]회사_이름_직책`(예 #안전원_변태섭_대리), 회사·직책·부서·번호·메일·주소·웹·메모 매핑. 설정: "이름 앞에 # 붙이기"(기본 켬) · "저장 전 확인"(켜면 연락처 앱 양식을 채워서 염, 끄면 바로 insert). 테스트 `test/phone_book_test.dart`
 - [x] **OCR 파서 보완 1차** — `docs/ocr-plan.md` §0~§5 반영 (픽스처 5장 + 실기기 변형 7건 테스트 통과). §6 사용자 수정 학습, §7 온디바이스 LLM 은 보류. 새 오인식 명함은 사진을 `test/fixtures/cards/` 에 넣고 `swift tools/ocr_fixtures.swift test/fixtures/cards` → `expected.json` 에 기대값 추가
 
 ## 아이디어 백로그 (우선순위 순, 검토 의견은 대화 기록)

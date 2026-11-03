@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/actions.dart';
 import '../../core/image_paths.dart';
+import '../../core/phone_book.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../data/contact_repo.dart';
@@ -84,6 +85,11 @@ class _DetailSheetState extends ConsumerState<DetailSheet> {
                   ]),
                 ),
               const Spacer(),
+              IconButton(
+                onPressed: () => _saveToPhoneBook(context, contact),
+                tooltip: '연락처에 저장',
+                icon: const Icon(Icons.person_add_alt_1_outlined, color: C.inkMuted, size: 24),
+              ),
               IconButton(
                 onPressed: () => ref.read(repoProvider).setFavorite(contact.id, !contact.favorite),
                 tooltip: contact.favorite ? '즐겨찾기 해제' : '즐겨찾기',
@@ -222,6 +228,25 @@ class _DetailSheetState extends ConsumerState<DetailSheet> {
       await repo.delete(fresh.id);
     }
     if (mounted) setState(() { _id = old.id; _dup = null; });
+  }
+
+  /// 폰 주소록에 저장 (설정: # 접두어 · 저장 전 양식 확인).
+  Future<void> _saveToPhoneBook(BuildContext context, Contact c) async {
+    final prefs = ref.read(phoneBookPrefsProvider);
+    final r = await PhoneBook.save(c, prefs);
+    if (!context.mounted) return;
+    switch (r) {
+      case PhoneBookResult.saved:
+        Toast.show(context, '연락처에 저장했어요 · ${PhoneBook.displayName(c, hash: prefs.hash)}', icon: Icons.check_rounded);
+      case PhoneBookResult.opened:
+        Toast.show(context, '연락처에 저장했어요', icon: Icons.check_rounded);
+      case PhoneBookResult.cancelled:
+        break;
+      case PhoneBookResult.denied:
+        Toast.show(context, '연락처 권한이 필요해요 (설정 > BizKeep)', icon: Icons.error_outline_rounded);
+      case PhoneBookResult.failed:
+        Toast.show(context, '저장할 수 없었어요', icon: Icons.error_outline_rounded);
+    }
   }
 
   void _edit(BuildContext context, Contact c) {

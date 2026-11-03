@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/actions.dart';
 import '../../core/calldir.dart';
+import '../../core/phone_book.dart';
 import '../../data/backup.dart';
+import '../../data/db.dart';
 import '../list/widgets.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
@@ -12,11 +14,19 @@ import '../../core/theme.dart';
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
+  /// 설정 화면 예시용 가짜 연락처 (이름 규칙 미리보기).
+  static final _sample = Contact(
+    id: '', name: '홍길동', company: '안전원', department: '', title: '대리',
+    phoneMobile: '', phoneOffice: '', fax: '', email: '', address: '', website: '', memo: '',
+    ocrRaw: '', source: 'manual', lowConfidence: '[]', favorite: false, isMine: false, createdAt: 0, updatedAt: 0,
+  );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final total = ref.watch(contactsProvider).value?.length ?? 0;
     final status = ref.watch(callDirStatusProvider).value ?? 'unknown';
     final enabled = status == 'enabled';
+    final pb = ref.watch(phoneBookPrefsProvider);
     return Scaffold(
       appBar: AppBar(
         backgroundColor: C.bg, surfaceTintColor: Colors.transparent, elevation: 0, centerTitle: true,
@@ -38,6 +48,22 @@ class SettingsScreen extends ConsumerWidget {
               },
             ),
             const _Toggle(title: '문자 발신자 식별', sub: 'iOS에서는 지원되지 않아요', value: false, enabled: false, last: true),
+          ]),
+          const SizedBox(height: 22),
+          _Group(title: '연락처 저장', children: [
+            _Toggle(
+              title: '이름 앞에 # 붙이기',
+              sub: '예) ${PhoneBook.displayName(_sample, hash: pb.hash)}',
+              value: pb.hash,
+              onChanged: (v) => ref.read(phoneBookPrefsProvider.notifier).setHash(v),
+            ),
+            _Toggle(
+              title: '저장 전 확인',
+              sub: pb.confirm ? '연락처 앱 양식을 채워서 열어요' : '상세 화면의 저장 버튼을 누르면 바로 저장해요',
+              value: pb.confirm,
+              last: true,
+              onChanged: (v) => ref.read(phoneBookPrefsProvider.notifier).setConfirm(v),
+            ),
           ]),
           const SizedBox(height: 22),
           _Group(title: '데이터', children: [
