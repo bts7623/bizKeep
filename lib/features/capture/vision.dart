@@ -38,9 +38,15 @@ abstract final class Vision {
   }
 
   /// 촬영 사진을 명함 영역으로 원근 보정 크롭 (같은 경로 덮어씀). 실패 시 null.
-  static Future<String?> cropCard(String path, CardQuad? q) async {
+  static Future<String?> cropCard(String path, CardQuad? q, {bool enhance = false}) async {
     if (!supported) return null;
-    return _ch.invokeMethod<String>('cropCard', {'path': path, 'quad': q?.pts});
+    return _ch.invokeMethod<String>('cropCard', {'path': path, 'quad': q?.pts, 'enhance': enhance, 'strength': 1.0});
+  }
+
+  /// 저장된 이미지에 스캔 질감(조명 평탄화·종이 톤·샤픈)만 적용해 같은 경로에 덮어씀.
+  static Future<bool> enhanceFile(String path) async {
+    if (!supported) return false;
+    return await _ch.invokeMethod<bool>('enhanceFile', {'path': path, 'strength': 1.0}) ?? false;
   }
 
   static Future<String> recognizeText(String path) async {

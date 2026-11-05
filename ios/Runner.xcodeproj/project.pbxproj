@@ -15,6 +15,7 @@
 		6669C5C3159C5C11ECE17705 /* CallDirectoryHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A76E9C61B1486443BF9D0E52 /* CallDirectoryHandler.swift */; };
 		73EC6552CC5094B96E77B7E5 /* CallDirPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8CC6E18D9076895799D2936 /* CallDirPlugin.swift */; };
 		85E387DCABB049A784EEAFD2 /* PhoneBookPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A99CDF7A96274262A2B5F5B7 /* PhoneBookPlugin.swift */; };
+		3763F8D07747474DB13D7966 /* ScanKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 592C6AEFFA57477B953430A4 /* ScanKit.swift */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 		8CA3148FCC4AD19CD8C1556C /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AE21B928A491C33F52445944 /* Pods_RunnerTests.framework */; };
@@ -101,6 +102,7 @@
 		C9CFD73C26E9BEC9FD825F78 /* CallKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CallKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/CallKit.framework; sourceTree = DEVELOPER_DIR; };
 		D8CC6E18D9076895799D2936 /* CallDirPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CallDirPlugin.swift; sourceTree = "<group>"; };
 		A99CDF7A96274262A2B5F5B7 /* PhoneBookPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PhoneBookPlugin.swift; sourceTree = "<group>"; };
+		592C6AEFFA57477B953430A4 /* ScanKit.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScanKit.swift; sourceTree = "<group>"; };
 		E7F2BDEC7B20534618FBCF35 /* Runner.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = Runner.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -227,6 +229,7 @@
 				E7F2BDEC7B20534618FBCF35 /* Runner.entitlements */,
 				D8CC6E18D9076895799D2936 /* CallDirPlugin.swift */,
 				A99CDF7A96274262A2B5F5B7 /* PhoneBookPlugin.swift */,
+				592C6AEFFA57477B953430A4 /* ScanKit.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -490,6 +493,7 @@
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				73EC6552CC5094B96E77B7E5 /* CallDirPlugin.swift in Sources */,
 				85E387DCABB049A784EEAFD2 /* PhoneBookPlugin.swift in Sources */,
+				3763F8D07747474DB13D7966 /* ScanKit.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

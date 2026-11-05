@@ -1,10 +1,16 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/actions.dart';
 import '../../core/calldir.dart';
+import '../../core/image_paths.dart';
 import '../../core/phone_book.dart';
+import '../../core/scan_prefs.dart';
+import '../capture/image_io.dart';
+import '../capture/vision.dart';
 import '../../data/backup.dart';
 import '../../data/db.dart';
 import '../list/widgets.dart';
@@ -27,6 +33,9 @@ class SettingsScreen extends ConsumerWidget {
     final status = ref.watch(callDirStatusProvider).value ?? 'unknown';
     final enabled = status == 'enabled';
     final pb = ref.watch(phoneBookPrefsProvider);
+    final scanLook = ref.watch(scanLookProvider);
+    final allCards = [...(ref.watch(contactsProvider).value ?? const <Contact>[]), ...(ref.watch(myCardsProvider).value ?? const <Contact>[])];
+    final withImage = allCards.where((c) => c.imageFront != null).length;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: C.bg, surfaceTintColor: Colors.transparent, elevation: 0, centerTitle: true,
@@ -72,6 +81,18 @@ class SettingsScreen extends ConsumerWidget {
             const _Toggle(title: '명함 원본 이미지 보관', sub: '끄면 텍스트만 저장', value: true, enabled: false, last: true),
           ]),
           const SizedBox(height: 22),
+          _Group(title: '명함 이미지', children: [
+            _Toggle(
+              title: '스캔 질감으로 저장',
+              sub: scanLook ? '그림자·누런 배경을 지우고 종이처럼 하얗게' : '찍은 사진 그대로 저장',
+              value: scanLook,
+              last: !scanLook || withImage == 0,
+              onChanged: (v) => ref.read(scanLookProvider.notifier).set(v),
+            ),
+            if (scanLook && withImage > 0)
+              _Action(icon: Icons.auto_fix_high_rounded, title: '기존 명함 모두 적용', sub: '$withImage장 · 되돌릴 수 없어요', onTap: () => _enhanceAll(context, ref, allCards)),
+          ]),
+          const SizedBox(height: 22),
           _Group(title: '정보', children: [
             Padding(
               padding: const EdgeInsets.all(14),
@@ -98,6 +119,34 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// 저장된 명함 이미지 전부에 스캔 질감 적용 (같은 파일 덮어쓰기 + 썸네일 재생성 + 이미지 캐시 비움).
+  Future<void> _enhanceAll(BuildContext context, WidgetRef ref, List<Contact> cards) async {
+    final targets = cards.where((c) => c.imageFront != null).toList();
+    final ok = await ConfirmSheet.show(context, title: '기존 명함 모두 적용', message: '${targets.length}장의 명함 이미지를 스캔 질감으로 바꿔요. 원본은 남지 않아요.', action: '적용');
+    if (!ok || !context.mounted) return;
+    _busy(context, '스캔 질감 적용 중…');
+    var done = 0;
+    for (final c in targets) {
+      final front = ImagePaths.resolve(c.imageFront!);
+      if (await Vision.enhanceFile(front)) {
+        done++;
+        await FileImage(File(front)).evict();
+        if (c.thumb != null) {
+          final thumb = ImagePaths.resolve(c.thumb!);
+          await ImageIo.makeThumb(front, thumb);
+          await FileImage(File(thumb)).evict();
+        }
+      }
+      if (c.imageBack != null) {
+        final back = ImagePaths.resolve(c.imageBack!);
+        if (await Vision.enhanceFile(back)) await FileImage(File(back)).evict();
+      }
+    }
+    if (!context.mounted) return;
+    Navigator.pop(context);
+    Toast.show(context, '$done장 적용했어요', icon: Icons.check_rounded);
   }
 
   Future<void> _export(BuildContext context, WidgetRef ref) async {

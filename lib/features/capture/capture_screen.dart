@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/image_paths.dart';
 import '../../core/providers.dart';
+import '../../core/scan_prefs.dart';
 import '../../core/theme.dart';
 import '../../data/ocr_parser.dart';
 import 'image_io.dart';
@@ -180,12 +181,16 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> with WidgetsBindi
       final dir = await ImageIo.cardsDir();
       final front = '${dir.path}/${id}_front.jpg';
       await File(srcPath).copy(front);
-      final cropped = await Vision.cropCard(front, quad);
+      final scanLook = ref.read(scanLookProvider);
+      final cropped = await Vision.cropCard(front, quad, enhance: scanLook);
       SavedImages saved;
       if (cropped != null) {
         saved = await ImageIo.makeThumb(front, '${dir.path}/${id}_thumb.jpg');
       } else {
         saved = await ImageIo.processAndSave(await File(front).readAsBytes(), fallbackRect, id);
+        if (scanLook && await Vision.enhanceFile(saved.front)) {
+          saved = await ImageIo.makeThumb(saved.front, saved.thumb);
+        }
       }
 
       if (widget.mine) {

@@ -29,11 +29,18 @@ final class VisionPlugin {
         let r = self.detectRect(bytes: data.data, width: w, height: h, bytesPerRow: bpr)
         DispatchQueue.main.async { result(r) }
       }
+    case "enhanceFile":
+      guard let path = args["path"] as? String else { result(false); return }
+      let strength = (args["strength"] as? Double) ?? 1.0
+      DispatchQueue.global(qos: .userInitiated).async {
+        let ok = self.enhanceFile(path: path, strength: strength)
+        DispatchQueue.main.async { result(ok) }
+      }
     case "cropCard":
       guard let path = args["path"] as? String else { result(nil); return }
       let quad = args["quad"] as? [Double]
       queue.async {
-        let out = self.cropCard(path: path, quad: quad)
+        let out = self.cropCard(path: path, enhance: (args["enhance"] as? Bool) ?? false, strength: (args["strength"] as? Double) ?? 1.0, quad: quad)
         DispatchQueue.main.async { result(out) }
       }
     case "recognizeText":
@@ -86,7 +93,17 @@ final class VisionPlugin {
   }
 
   // MARK: - 원근 보정 크롭 → 같은 경로에 덮어쓰기 (JPEG, 긴 변 1280)
-  private func cropCard(path: String, quad: [Double]?) -> String? {
+  /// 저장된 이미지에 스캔 질감만 적용해 같은 경로에 덮어쓰기 (기존 명함 일괄 처리용).
+  private func enhanceFile(path: String, strength: Double) -> Bool {
+    guard let ui = UIImage(contentsOfFile: path), let cg = ui.cgImage else { return false }
+    let ci = CIImage(cgImage: cg).oriented(forExifOrientation: Int32(ui.imageOrientation.exifValue))
+    let out = ScanKit.enhance(ci, strength: strength)
+    guard let cgOut = ciContext.createCGImage(out, from: out.extent), let data = UIImage(cgImage: cgOut).jpegData(compressionQuality: 0.85) else { return false }
+    do { try data.write(to: URL(fileURLWithPath: path), options: .atomic) } catch { return false }
+    return true
+  }
+
+  private func cropCard(path: String, enhance: Bool, strength: Double, quad: [Double]?) -> String? {
     guard let ui = UIImage(contentsOfFile: path), let cg = ui.cgImage else { return nil }
     var ci = CIImage(cgImage: cg).oriented(forExifOrientation: Int32(ui.imageOrientation.exifValue))
     let ext = ci.extent
@@ -108,6 +125,7 @@ final class VisionPlugin {
     }
     // 사각형을 못 찾았으면 nil 을 돌려 Dart 가 가이드 프레임 영역으로라도 잘라내게 한다 (세로 원본이 그대로 저장되는 것 방지)
     if !cropped { return nil }
+    if enhance { ci = ScanKit.enhance(ci, strength: strength) }
     // 리사이즈
     let longest = max(ci.extent.width, ci.extent.height)
     if longest > 1280 {
@@ -126,7 +144,18 @@ final class VisionPlugin {
     req.minimumSize = 0.15; req.minimumConfidence = 0.5; req.maximumObservations = 1
     let h = VNImageRequestHandler(ciImage: ci, options: [:])
     try? h.perform([req])
-    return req.results?.first
+    if let r = req.results?.first { return r }
+    // 사각 검출 실패 시 문서 세그멘테이션 (앨범 사진·배경이 복잡한 경우)
+    if #available(iOS 15.0, *) {
+      let seg = VNDetectDocumentSegmentationRequest()
+      try? h.perform([seg])
+      if let o = seg.results?.first, o.confidence > 0.6 {
+        let w = o.boundingBox.width * ci.extent.width, hh = o.boundingBox.height * ci.extent.height
+        let r = min(w, hh) / max(w, hh)
+        if r >= 0.45 && r <= 0.75 { return o }
+      }
+    }
+    return nil
   }
 
   private func perspective(_ ci: CIImage, _ o: VNRectangleObservation, _ ext: CGRect) -> CIImage {

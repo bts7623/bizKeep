@@ -81,6 +81,7 @@ tools/
 - [x] 4단계: 백업/복원(`data/backup.dart` — zip: contacts.json + contacts.csv(BOM) + images/회사_이름_직책.jpg + my_cards/; 내려받기=공유 시트, 가져오기=file_picker; UUID 같으면 updated_at 최신 쪽, 압축·해제는 isolate) · 초성검색(`chosungOf`, 초성만 입력 시 이름>회사)
 - [x] 앱 아이콘: 흰 배경 뷰파인더(네이비 브래킷 + 파란 명함). 원본은 디자인 캔버스 Icons3 보드, 설정 화면 `_MiniIconPainter` 동일 도형
 - [x] 폰 주소록 저장(`core/phone_book.dart` + `ios/Runner/PhoneBookPlugin.swift`, 채널 `bizkeep/phonebook`: requestAccess/fetchAll/insert/update/openInsert — flutter_contacts 는 씬 기반 템플릿에서 시작 시 크래시(window nil)라 제외. 메모는 iOS notes entitlement 필요해 미전송): 상세 헤더 사람+ 아이콘 → 이름 `[#]회사_이름_직책`(예 #안전원_변태섭_대리), 회사·직책·부서·번호·메일·주소·웹 매핑. 설정: "이름 앞에 # 붙이기"(기본 켬) · "저장 전 확인"(켜면 연락처 앱 양식을 채워서 염, 끄면 바로 insert). **중복 방지**: 저장 전 주소록 전체를 읽어 휴대전화(뒤 8자리)→이메일로 같은 사람 찾기 → 달라진 항목 시트(`_PhoneDupSheet`) → 덮어쓰기(명함 항목만 갱신, 주소록에만 있는 정보 유지)/따로 추가; 같으면 토스트만. 테스트 `test/phone_book_test.dart`
+- [x] 스캔 질감(`ios/Runner/ScanKit.swift` — 세그멘테이션/사각 검출 → 원근 보정 → 조명 평탄화(블러 나눗셈) → 종이 톤 커브 → 언샤프; CIDocumentEnhancer 는 크롭 이미지에서 무반응이라 미사용): `cropCard(enhance:)`·`enhanceFile` 채널, 설정 "스캔 질감으로 저장"(기본 켬, `core/scan_prefs.dart`) + "기존 명함 모두 적용"(덮어쓰기·썸네일 재생성·FileImage evict). 파라미터 검증 `tools/scan_proto.swift <in> <out>` → tools/logs/scan/*_compare.png. 독립 앱 **스캔뿅** 설계는 프로젝트 문서 bizkeep/scan-plan.md
 - [x] **OCR 파서 보완 1차** — `docs/ocr-plan.md` §0~§5 반영 (픽스처 5장 + 실기기 변형 7건 테스트 통과). §6 사용자 수정 학습, §7 온디바이스 LLM 은 보류. 새 오인식 명함은 사진을 `test/fixtures/cards/` 에 넣고 `swift tools/ocr_fixtures.swift test/fixtures/cards` → `expected.json` 에 기대값 추가
 
 ## 아이디어 백로그 (우선순위 순, 검토 의견은 대화 기록)
